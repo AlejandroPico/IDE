@@ -84,6 +84,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: ${{ matrix.args }}
+          retryAttempts: 2
           tagName: "${{ (startsWith(github.ref, 'refs/tags/v') || startsWith(github.event.head_commit.message, 'feat: lanzar IDE híbrido')) && 'v__VERSION__' || '' }}"
           releaseName: "${{ (startsWith(github.ref, 'refs/tags/v') || startsWith(github.event.head_commit.message, 'feat: lanzar IDE híbrido')) && 'IDE v__VERSION__' || '' }}"
           releaseBody: "${{ (startsWith(github.ref, 'refs/tags/v') || startsWith(github.event.head_commit.message, 'feat: lanzar IDE híbrido')) && 'IDE híbrido para Windows, Linux y macOS. Consulta el README para capacidades y requisitos de toolchains.' || '' }}"
