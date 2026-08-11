@@ -282,19 +282,36 @@ async fn detect_toolchains() -> Vec<ToolchainStatus> {
     let version: &[&str] = &["--version"];
     let java_version: &[&str] = &["-version"];
     let python_version: &[&str] = &["--version"];
+    let go_version: &[&str] = &["version"];
+    let node_candidates = [("node", version), ("bun", version), ("deno", version)];
+    let python_candidates = [
+        ("python", python_version),
+        ("python3", python_version),
+        ("py", python_version),
+    ];
+    let java_candidates = [("javac", version), ("java", java_version)];
+    let c_candidates = [("gcc", version), ("clang", version), ("cl", empty)];
+    let cpp_candidates = [("g++", version), ("clang++", version), ("cl", empty)];
+    let dotnet_candidates = [("dotnet", version)];
+    let rust_candidates = [("cargo", version), ("rustc", version)];
+    let php_candidates = [("php", version)];
+    let go_candidates = [("go", go_version)];
+    let ruby_candidates = [("ruby", version)];
+    let kotlin_candidates = [("kotlinc", version)];
+    let maven_candidates = [("mvn", version), ("mvn.cmd", version)];
     let futures = [
-        detect_one("node", "Node.js", &[("node", version), ("bun", version), ("deno", version)]),
-        detect_one("python", "Python", &[("python", python_version), ("python3", python_version), ("py", python_version)]),
-        detect_one("java", "JDK", &[("javac", version), ("java", java_version)]),
-        detect_one("c", "Compilador C", &[("gcc", version), ("clang", version), ("cl", empty)]),
-        detect_one("cpp", "Compilador C++", &[("g++", version), ("clang++", version), ("cl", empty)]),
-        detect_one("dotnet", ".NET SDK", &[("dotnet", version)]),
-        detect_one("rust", "Rust / Cargo", &[("cargo", version), ("rustc", version)]),
-        detect_one("php", "PHP", &[("php", version)]),
-        detect_one("go", "Go", &[("go", &["version"])]),
-        detect_one("ruby", "Ruby", &[("ruby", version)]),
-        detect_one("kotlin", "Kotlin", &[("kotlinc", version)]),
-        detect_one("maven", "Apache Maven", &[("mvn", version), ("mvn.cmd", version)]),
+        detect_one("node", "Node.js", &node_candidates),
+        detect_one("python", "Python", &python_candidates),
+        detect_one("java", "JDK", &java_candidates),
+        detect_one("c", "Compilador C", &c_candidates),
+        detect_one("cpp", "Compilador C++", &cpp_candidates),
+        detect_one("dotnet", ".NET SDK", &dotnet_candidates),
+        detect_one("rust", "Rust / Cargo", &rust_candidates),
+        detect_one("php", "PHP", &php_candidates),
+        detect_one("go", "Go", &go_candidates),
+        detect_one("ruby", "Ruby", &ruby_candidates),
+        detect_one("kotlin", "Kotlin", &kotlin_candidates),
+        detect_one("maven", "Apache Maven", &maven_candidates),
     ];
     futures::future::join_all(futures).await
 }
