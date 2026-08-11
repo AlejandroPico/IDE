@@ -24,16 +24,18 @@ import { selectActiveProject, useIDEStore } from "../store/ideStore";
 import { openWorkspace, runActiveFile, saveActiveFile } from "../services/ideActions";
 import { detachEditor } from "../services/windowing";
 
+const EMPTY_DIAGNOSTICS: CodeDiagnostic[] = [];
+
 const configureMonaco: BeforeMount = (monaco) => {
-  monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
-  monaco.languages.typescript.javascriptDefaults.setEagerModelSync(true);
-  monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-    target: monaco.languages.typescript.ScriptTarget.ES2024,
+  monaco.typescript.typescriptDefaults.setEagerModelSync(true);
+  monaco.typescript.javascriptDefaults.setEagerModelSync(true);
+  monaco.typescript.typescriptDefaults.setCompilerOptions({
+    target: monaco.typescript.ScriptTarget.ES2024,
     allowNonTsExtensions: true,
-    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-    module: monaco.languages.typescript.ModuleKind.ESNext,
+    moduleResolution: monaco.typescript.ModuleResolutionKind.NodeJs,
+    module: monaco.typescript.ModuleKind.ESNext,
     strict: true,
-    jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+    jsx: monaco.typescript.JsxEmit.ReactJSX,
     noEmit: true
   });
   monaco.editor.defineTheme("ide-obsidian", {
@@ -97,7 +99,8 @@ const CodeEditor = ({ file, detached = false }: { file: IDEFile; detached?: bool
   const settings = useIDEStore((state) => state.settings);
   const updateFile = useIDEStore((state) => state.updateFile);
   const setDiagnostics = useIDEStore((state) => state.setDiagnostics);
-  const diagnostics = useIDEStore((state) => state.diagnostics[file.id] ?? []);
+  const fileDiagnostics = useIDEStore((state) => state.diagnostics[file.id]);
+  const diagnostics = fileDiagnostics ?? EMPTY_DIAGNOSTICS;
   const setContextMenu = useIDEStore((state) => state.setContextMenu);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);

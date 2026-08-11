@@ -7,7 +7,7 @@ import {
   PanelTop,
   X
 } from "lucide-react";
-import { useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import type { FloatingWindowState } from "../core/types";
 import { selectActiveProject, useIDEStore } from "../store/ideStore";
 import { buildWebPreview } from "../services/runtime";
@@ -16,7 +16,8 @@ import { CodeEditor } from "./EditorWorkspace";
 const FloatingContent = ({ windowState }: { windowState: FloatingWindowState }) => {
   const project = useIDEStore(selectActiveProject);
   const previewHtml = useIDEStore((state) => state.previewHtml);
-  const diagnostics = useIDEStore((state) => Object.values(state.diagnostics).flat());
+  const diagnosticsMap = useIDEStore((state) => state.diagnostics);
+  const diagnostics = useMemo(() => Object.values(diagnosticsMap).flat(), [diagnosticsMap]);
   const toolchains = useIDEStore((state) => state.toolchains);
   if (windowState.kind === "editor" && windowState.fileId) {
     const file = project.files[windowState.fileId];

@@ -26,9 +26,9 @@ import {
   Workflow
 } from "lucide-react";
 import type { ComponentType, MouseEvent as ReactMouseEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActivityId } from "../core/types";
-import { useIDEStore, selectActiveProject, selectDiagnosticTotals } from "../store/ideStore";
+import { useIDEStore, selectActiveProject } from "../store/ideStore";
 import { exportProjectJson, exportProjectZip } from "../services/projectIO";
 import { importWorkspaceFile, openWorkspace, runActiveFile, saveActiveFile, saveAllFiles } from "../services/ideActions";
 import { isTauriRuntime } from "../services/desktop";
@@ -217,7 +217,14 @@ const ActivityRail = () => {
 
 const StatusBar = () => {
   const project = useIDEStore(selectActiveProject);
-  const totals = useIDEStore(selectDiagnosticTotals);
+  const diagnosticsMap = useIDEStore((state) => state.diagnostics);
+  const totals = useMemo(() => {
+    const diagnostics = Object.values(diagnosticsMap).flat();
+    return {
+      errors: diagnostics.filter((item) => item.severity === "error").length,
+      warnings: diagnostics.filter((item) => item.severity === "warning").length
+    };
+  }, [diagnosticsMap]);
   const activeFileId = useIDEStore((state) => state.editorGroups.find((group) => group.id === state.activeGroupId)?.activeFileId);
   const activeFile = activeFileId ? project.files[activeFileId] : undefined;
   const settings = useIDEStore((state) => state.settings);

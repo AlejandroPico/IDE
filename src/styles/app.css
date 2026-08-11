@@ -85,7 +85,7 @@
 
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-body { min-width: 720px; background: var(--canvas); }
+body { min-width: 0; background: var(--canvas); }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { border: 0; }
 button:not(:disabled), select:not(:disabled), input[type="checkbox"] { cursor: pointer; }
@@ -618,15 +618,65 @@ kbd { font-family: "JetBrains Mono", "Cascadia Code", monospace; font-size: 10px
 }
 
 @media (max-width: 800px) {
-  body { min-width: 640px; }
+  :root { --rail-w: 44px; }
+  .workspace-grid { position: relative; overflow: hidden; }
+  .side-region {
+    position: absolute;
+    inset: 0 auto 0 var(--rail-w);
+    width: min(290px, calc(100vw - var(--rail-w))) !important;
+    min-width: 0;
+    box-shadow: 18px 0 45px rgb(0 0 0 / 42%);
+    z-index: 45;
+  }
+  .side-region .resize-handle { display: none; }
   .brand { width: 53px; padding: 0 13px; }
   .brand div { display: none; }
   .topbar__actions .icon-button:nth-last-child(n+3) { display: none; }
-  .command-trigger { min-width: 140px; }
+  .topbar__actions { min-width: 0; margin-left: 3px; padding: 0 3px; }
+  .command-trigger { min-width: 0; margin-left: 6px; }
+  .command-trigger kbd { display: none; }
+  .dock-tabs nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .dock-tabs nav::-webkit-scrollbar { display: none; }
   .statusbar__center { display: none !important; }
+  .statusbar > div:last-child span:nth-child(2),
+  .statusbar > div:last-child span:nth-child(3),
+  .statusbar > div:last-child span:nth-child(4) { display: none; }
   .welcome-canvas { padding: 35px; }
   .download-hero { grid-template-columns: 1fr; }
   .download-device { display: none; }
   .download-options { grid-template-columns: 1fr; max-height: 280px; overflow: auto; }
   .download-options article { min-height: 120px; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+
+@media (max-width: 520px) {
+  .run-button { width: 30px; padding: 0; justify-content: center; }
+  .run-button > span:not(.run-spinner) { display: none; }
+  .topbar__actions .icon-button:last-child { display: none; }
+  .activity-rail button { height: 44px; }
+  .welcome-canvas { padding: 24px 20px; }
+  .welcome-canvas h1 { font-size: 38px; }
+  .welcome-canvas__hero > div { align-items: stretch; flex-direction: column; }
+  .quick-templates, .template-grid { grid-template-columns: 1fr; }
+  .wizard-modal, .settings-modal, .downloads-modal, .about-modal, .shortcuts-modal { width: calc(100vw - 20px); }
+  .wizard-body { grid-template-columns: 1fr; }
+  .wizard-categories { display: flex; overflow-x: auto; padding: 6px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .wizard-categories button { width: auto; flex: 0 0 auto; }
+  .wizard-categories button b { margin-left: 6px; }
+  .wizard-progress span { font-size: 0; }
+  .wizard-progress span b { font-size: 8px; }
+  .wizard-progress i { width: 22px; }
+  .theme-grid { grid-template-columns: repeat(2, 1fr); }
+  .download-hero { min-height: 0; padding: 22px 18px; }
+  .download-primary { width: 100%; min-width: 0; }
+  .release-assets { grid-template-columns: 1fr; }
+  .release-assets > div { grid-template-columns: 1fr; }
+  .about-body { grid-template-columns: 1fr; }
+  .about-brand { display: none; }
+  .about-body > div:last-child { padding: 24px; }
+  .floating-window, .floating-window.is-minimized {
+    left: 8px !important;
+    width: calc(100vw - 16px) !important;
+    min-width: 0;
+    max-width: none;
+  }
 }

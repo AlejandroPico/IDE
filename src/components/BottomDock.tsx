@@ -94,7 +94,8 @@ const PreviewPanel = () => {
 
 const OutputPanel = () => {
   const project = useIDEStore(selectActiveProject);
-  const diagnostics = useIDEStore((state) => Object.values(state.diagnostics).flat());
+  const diagnosticsMap = useIDEStore((state) => state.diagnostics);
+  const diagnostics = useMemo(() => Object.values(diagnosticsMap).flat(), [diagnosticsMap]);
   const languages = useMemo(() => new Set(Object.values(project.files).map((file) => file.language)), [project.files]);
   return (
     <div className="output-panel">
@@ -114,7 +115,8 @@ Estado: preparado`}</pre>
 
 export function BottomDock() {
   const active = useIDEStore((state) => state.bottomPanel);
-  const diagnostics = useIDEStore((state) => Object.values(state.diagnostics).flat());
+  const diagnosticsMap = useIDEStore((state) => state.diagnostics);
+  const diagnostics = useMemo(() => Object.values(diagnosticsMap).flat(), [diagnosticsMap]);
   const entries = useIDEStore((state) => state.consoleEntries);
   const running = useIDEStore((state) => state.running);
   const setBottomPanel = useIDEStore((state) => state.setBottomPanel);
