@@ -1,0 +1,16 @@
+{
+  "name": "IDE — Entorno de desarrollo integral",
+  "short_name": "IDE",
+  "description": "Editor multilenguaje híbrido para web y escritorio.",
+  "theme_color": "#07110f",
+  "background_color": "#07110f",
+  "display": "standalone",
+  "orientation": "any",
+  "start_url": "/IDE/",
+  "scope": "/IDE/",
+  "icons": [
+    { "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "pwa-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
