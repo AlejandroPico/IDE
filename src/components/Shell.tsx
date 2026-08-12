@@ -216,6 +216,7 @@ const ActivityRail = () => {
 };
 
 const StatusBar = () => {
+  const buildRevision = (import.meta.env.VITE_BUILD_REVISION || "local").slice(0, 7);
   const project = useIDEStore(selectActiveProject);
   const diagnosticsMap = useIDEStore((state) => state.diagnostics);
   const totals = useMemo(() => {
@@ -244,6 +245,7 @@ const StatusBar = () => {
         <span>LF</span>
         <span>{settings.tabSize} espacios</span>
         <span>{isTauriRuntime() ? "Escritorio" : "Navegador"}</span>
+        <span title={`Compilación ${buildRevision}`}>r{buildRevision}</span>
       </div>
     </footer>
   );

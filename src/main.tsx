@@ -6,7 +6,23 @@ import "./styles/app.css";
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("./sw.js", { scope: "./" });
+    const controlledAtLoad = Boolean(navigator.serviceWorker.controller);
+    let refreshing = false;
+
+    if (controlledAtLoad) {
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+    }
+
+    void navigator.serviceWorker.register("./sw.js", {
+      scope: "./",
+      updateViaCache: "none"
+    }).then((registration) => {
+      void registration.update();
+    });
   });
 }
 

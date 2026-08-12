@@ -1,4 +1,4 @@
-const CACHE_NAME = "alejandropico-ide-v1";
+const CACHE_NAME = "alejandropico-ide-v2-20260812";
 const APP_SHELL = ["./", "./index.html", "./favicon.svg", "./manifest.webmanifest", "./pwa-192x192.png", "./pwa-512x512.png"];
 
 self.addEventListener("install", (event) => {
@@ -17,7 +17,7 @@ self.addEventListener("fetch", (event) => {
   if (!sameOrigin && !pyodide) return;
 
   if (sameOrigin && event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).then((response) => {
+    event.respondWith(fetch(event.request, { cache: "no-store" }).then((response) => {
       if (response.ok) {
         const copy = response.clone();
         void caches.open(CACHE_NAME).then((cache) => cache.put("./index.html", copy));

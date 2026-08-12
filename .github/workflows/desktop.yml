@@ -21,6 +21,9 @@ concurrency:
   group: desktop-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  VITE_BUILD_REVISION: ${{ github.sha }}
+
 jobs:
   build-desktop:
     name: ${{ matrix.name }}

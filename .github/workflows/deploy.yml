@@ -14,6 +14,9 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  VITE_BUILD_REVISION: ${{ github.sha }}
+
 jobs:
   verify:
     name: Verificar y construir
