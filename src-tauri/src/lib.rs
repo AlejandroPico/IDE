@@ -417,8 +417,8 @@ async fn run_git_action(
     let output = git_output(&root_path, &args).await?;
     Ok(GitActionResult {
         ok: output.status.success(),
-        stdout: truncate_output(String::from_utf8_lossy(&output.stdout).to_string()),
-        stderr: truncate_output(String::from_utf8_lossy(&output.stderr).to_string()),
+        stdout: truncate_output(&output.stdout),
+        stderr: truncate_output(&output.stderr),
     })
 }
 
