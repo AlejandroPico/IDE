@@ -419,7 +419,7 @@ export const useIDEStore = create<IDEState>()(
       }),
 
       setSelectedFile: (fileId) => set({ selectedFileId: fileId }),
-      setActivity: (activity) => set((state) => ({ activeActivity: activity, leftPanelOpen: state.activeActivity === activity ? !state.leftPanelOpen : true })),
+      setActivity: (activity) => set({ activeActivity: activity, leftPanelOpen: true }),
       setBottomPanel: (panel, open = true) => set({ bottomPanel: panel, bottomPanelOpen: open }),
       toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen })),
       toggleBottomPanel: () => set((state) => ({ bottomPanelOpen: !state.bottomPanelOpen })),
