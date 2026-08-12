@@ -24,6 +24,7 @@ import {
   Laptop,
   MonitorDown,
   MoonStar,
+  Orbit,
   PackageCheck,
   Palette,
   Play,
@@ -32,6 +33,8 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
+  Sunset,
+  SwatchBook,
   Workflow,
   X
 } from "lucide-react";
@@ -138,7 +141,14 @@ const SettingsModal = () => {
   const update = useIDEStore((state) => state.updateSettings);
   const setModal = useIDEStore((state) => state.setModal);
   const themes: Array<{ id: ThemeId; label: string; icon: ComponentType<{ size?: number }> }> = [
-    { id: "obsidian", label: "Obsidiana", icon: MoonStar }, { id: "paper", label: "Papel", icon: Sun }, { id: "blueprint", label: "Plano técnico", icon: Palette }, { id: "auto", label: "Automático", icon: Laptop }
+    { id: "obsidian", label: "Obsidiana", icon: MoonStar },
+    { id: "graphite", label: "Grafito", icon: SwatchBook },
+    { id: "aurora", label: "Aurora", icon: Orbit },
+    { id: "violet", label: "Violeta", icon: Sparkles },
+    { id: "paper", label: "Papel", icon: Sun },
+    { id: "sand", label: "Arena", icon: Sunset },
+    { id: "blueprint", label: "Plano técnico", icon: Palette },
+    { id: "auto", label: "Automático", icon: Laptop }
   ];
   return (
     <ModalFrame title="Preferencias del entorno" eyebrow="CONFIGURACIÓN LOCAL" icon={Settings} onClose={() => setModal("settings", false)} className="settings-modal">

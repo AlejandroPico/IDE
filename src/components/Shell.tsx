@@ -2,18 +2,22 @@ import {
   Blocks,
   Boxes,
   Bug,
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
   CloudDownload,
   Command,
-  Download,
   FileArchive,
   FileCode2,
+  FolderKanban,
   FolderOpen,
   GitBranch,
-  HardDriveDownload,
   Info,
   Keyboard,
+  LayoutDashboard,
   LayoutPanelLeft,
-  MoonStar,
+  Menu,
+  Palette,
   PanelBottom,
   Play,
   Plus,
@@ -21,14 +25,14 @@ import {
   Search,
   Settings,
   Sparkles,
-  Sun,
   Upload,
-  Workflow
+  Workflow,
+  Wrench
 } from "lucide-react";
 import type { ComponentType, MouseEvent as ReactMouseEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ActivityId } from "../core/types";
-import { useIDEStore, selectActiveProject } from "../store/ideStore";
+import type { ActivityId, ThemeId } from "../core/types";
+import { selectActiveProject, useIDEStore } from "../store/ideStore";
 import { exportProjectJson, exportProjectZip } from "../services/projectIO";
 import { importWorkspaceFile, openWorkspace, runActiveFile, saveActiveFile, saveAllFiles } from "../services/ideActions";
 import { isTauriRuntime } from "../services/desktop";
@@ -39,30 +43,6 @@ import { ContextMenu } from "./ContextMenu";
 import { FloatingWindows } from "./FloatingWindows";
 import { AllModals } from "./Modals";
 
-interface IconButtonProps {
-  label: string;
-  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
-  onClick: () => void;
-  active?: boolean;
-  disabled?: boolean;
-  shortcut?: string;
-  className?: string;
-}
-
-export const IconButton = ({ label, icon: Icon, onClick, active, disabled, shortcut, className = "" }: IconButtonProps) => (
-  <button
-    className={`icon-button ${active ? "is-active" : ""} ${className}`}
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    title={shortcut ? `${label} · ${shortcut}` : label}
-    aria-label={label}
-    aria-pressed={active}
-  >
-    <Icon size={17} strokeWidth={1.8} />
-  </button>
-);
-
 interface MenuItem {
   label: string;
   icon?: ComponentType<{ size?: number }>;
@@ -72,55 +52,102 @@ interface MenuItem {
   separator?: boolean;
 }
 
-const AppMenu = ({ label, items }: { label: string; items: MenuItem[] }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: PointerEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    window.addEventListener("pointerdown", close);
-    return () => window.removeEventListener("pointerdown", close);
-  }, [open]);
-  return (
-    <div className="app-menu" ref={ref}>
-      <button type="button" className={open ? "is-open" : ""} onClick={() => setOpen((value) => !value)}>{label}</button>
-      {open && (
-        <div className="app-menu__popover" role="menu">
-          {items.map((item, index) => {
-            const ItemIcon = item.icon;
-            return (
-              <div key={`${item.label}-${index}`}>
-                {item.separator && <div className="menu-separator" />}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={item.danger ? "danger" : ""}
-                  onClick={() => { item.action(); setOpen(false); }}
-                >
-                  <span>{ItemIcon && <ItemIcon size={15} />}{item.label}</span>
-                  {item.shortcut && <kbd>{item.shortcut}</kbd>}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
+interface RailMenuProps {
+  id: string;
+  label: string;
+  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
+  items: MenuItem[];
+  open: boolean;
+  onToggle: (id: string) => void;
+}
 
-const TopBar = () => {
+const RailMenu = ({ id, label, icon: Icon, items, open, onToggle }: RailMenuProps) => (
+  <div className="rail-menu">
+    <button className={`rail-subitem ${open ? "is-open" : ""}`} type="button" onClick={() => onToggle(id)} aria-expanded={open}>
+      <Icon size={16} strokeWidth={1.8} />
+      <span>{label}</span>
+      <ChevronRight className="rail-subitem__chevron" size={13} />
+    </button>
+    {open && (
+      <div className="rail-menu__popover" role="menu">
+        <header><span>{label}</span><small>IDE</small></header>
+        {items.map((item, index) => {
+          const ItemIcon = item.icon;
+          return (
+            <div key={`${item.label}-${index}`}>
+              {item.separator && <div className="menu-separator" />}
+              <button
+                type="button"
+                role="menuitem"
+                className={item.danger ? "danger" : ""}
+                onClick={() => { item.action(); onToggle(""); }}
+              >
+                <span>{ItemIcon && <ItemIcon size={15} />}{item.label}</span>
+                {item.shortcut && <kbd>{item.shortcut}</kbd>}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+);
+
+const activities: Array<{ id: ActivityId; label: string; icon: ComponentType<{ size?: number; strokeWidth?: number }> }> = [
+  { id: "explorer", label: "Proyecto", icon: Boxes },
+  { id: "search", label: "Buscar en archivos", icon: Search },
+  { id: "run", label: "Diagnóstico", icon: Bug },
+  { id: "source", label: "Cambios", icon: GitBranch },
+  { id: "architecture", label: "Arquitectura", icon: Workflow }
+];
+
+const themeOrder: ThemeId[] = ["obsidian", "graphite", "aurora", "violet", "paper", "sand", "blueprint", "auto"];
+
+const NavigationRail = () => {
+  const [expanded, setExpanded] = useState(false);
+  const [menusVisible, setMenusVisible] = useState(false);
+  const [openMenu, setOpenMenu] = useState("");
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const project = useIDEStore(selectActiveProject);
-  const settings = useIDEStore((state) => state.settings);
+  const active = useIDEStore((state) => state.activeActivity);
+  const panelOpen = useIDEStore((state) => state.leftPanelOpen);
   const running = useIDEStore((state) => state.running);
-  const updateSettings = useIDEStore((state) => state.updateSettings);
-  const setModal = useIDEStore((state) => state.setModal);
+  const settings = useIDEStore((state) => state.settings);
   const setActivity = useIDEStore((state) => state.setActivity);
+  const setModal = useIDEStore((state) => state.setModal);
   const toggleLeftPanel = useIDEStore((state) => state.toggleLeftPanel);
   const toggleBottomPanel = useIDEStore((state) => state.toggleBottomPanel);
   const splitEditor = useIDEStore((state) => state.splitEditor);
+  const updateSettings = useIDEStore((state) => state.updateSettings);
+
+  useEffect(() => {
+    const close = (event: PointerEvent) => {
+      if (!surfaceRef.current?.contains(event.target as Node)) setOpenMenu("");
+    };
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, []);
+
+  const toggleMenu = (id: string) => setOpenMenu((current) => current === id ? "" : id);
+  const openMenuHub = () => {
+    if (!expanded) {
+      setExpanded(true);
+      setMenusVisible(true);
+      return;
+    }
+    setMenusVisible((value) => !value);
+    setOpenMenu("");
+  };
+  const toggleRail = () => {
+    if (expanded) {
+      setExpanded(false);
+      setOpenMenu("");
+      return;
+    }
+    setExpanded(true);
+    setMenusVisible(true);
+  };
+  const cycleTheme = () => updateSettings({ theme: themeOrder[(themeOrder.indexOf(settings.theme) + 1) % themeOrder.length] });
 
   const projectMenu: MenuItem[] = [
     { label: "Nuevo proyecto", icon: Plus, shortcut: "Ctrl+N", action: () => setModal("projectWizard", true) },
@@ -145,71 +172,74 @@ const TopBar = () => {
   ];
   const helpMenu: MenuItem[] = [
     { label: "Atajos de teclado", icon: Keyboard, action: () => setModal("shortcuts", true) },
-    { label: "Descargas Desktop", icon: HardDriveDownload, action: () => setModal("downloads", true) },
+    { label: "Descargas Desktop", icon: CloudDownload, action: () => setModal("downloads", true) },
     { label: "Acerca del IDE", icon: Info, separator: true, action: () => setModal("about", true) }
   ];
 
-  const cycleTheme = () => {
-    const order = ["obsidian", "paper", "blueprint", "auto"] as const;
-    updateSettings({ theme: order[(order.indexOf(settings.theme) + 1) % order.length] });
-  };
-  const ThemeIcon = settings.theme === "paper" ? Sun : MoonStar;
-
   return (
-    <header className="topbar" data-tauri-drag-region>
-      <div className="brand" data-tauri-drag-region>
-        <img src="./favicon.svg" alt="" />
-        <div><strong>IDE</strong><span>{isTauriRuntime() ? "DESKTOP" : "WEB"}</span></div>
-      </div>
-      <nav className="menu-strip" aria-label="Menú principal">
-        <AppMenu label="Proyecto" items={projectMenu} />
-        <AppMenu label="Vista" items={viewMenu} />
-        <AppMenu label="Herramientas" items={toolsMenu} />
-        <AppMenu label="Ayuda" items={helpMenu} />
-      </nav>
-      <button className="command-trigger" type="button" onClick={() => setModal("commandPalette", true)}>
-        <Search size={15} /><span>{project.name}</span><kbd>Ctrl P</kbd>
-      </button>
-      <div className="topbar__actions">
-        <IconButton label="Guardar" icon={Save} shortcut="Ctrl+S" onClick={() => void saveActiveFile()} />
-        <button className="run-button" type="button" disabled={running} onClick={() => void runActiveFile()}>
-          {running ? <span className="run-spinner" /> : <Play size={15} fill="currentColor" />}
-          <span>{running ? "Ejecutando" : "Ejecutar"}</span>
+    <aside className={`navigation-rail ${expanded ? "is-expanded" : ""}`} aria-label="Navegación principal">
+      <div className="navigation-rail__surface" ref={surfaceRef}>
+        <button
+          className="rail-brand"
+          type="button"
+          onClick={toggleRail}
+          title={expanded ? "Plegar navegación" : "Desplegar navegación"}
+          aria-expanded={expanded}
+        >
+          <img src="./favicon.svg" alt="" />
+          <span><strong>IDE</strong><small>{isTauriRuntime() ? "DESKTOP" : "WEB"}</small></span>
+          <ChevronRight size={14} />
         </button>
-        <IconButton label="Descargar IDE" icon={Download} onClick={() => setModal("downloads", true)} />
-        <IconButton label={`Tema: ${settings.theme}`} icon={ThemeIcon} onClick={cycleTheme} />
-        <IconButton label="Preferencias" icon={Settings} onClick={() => setModal("settings", true)} />
-      </div>
-    </header>
-  );
-};
 
-const activities: Array<{ id: ActivityId; label: string; icon: ComponentType<{ size?: number }> }> = [
-  { id: "explorer", label: "Proyecto", icon: Boxes },
-  { id: "search", label: "Buscar", icon: Search },
-  { id: "run", label: "Ejecutar y diagnosticar", icon: Bug },
-  { id: "source", label: "Cambios", icon: GitBranch },
-  { id: "architecture", label: "Arquitectura", icon: Workflow }
-];
-
-const ActivityRail = () => {
-  const active = useIDEStore((state) => state.activeActivity);
-  const panelOpen = useIDEStore((state) => state.leftPanelOpen);
-  const setActivity = useIDEStore((state) => state.setActivity);
-  const setModal = useIDEStore((state) => state.setModal);
-  return (
-    <aside className="activity-rail" aria-label="Áreas de trabajo">
-      <div className="activity-rail__main">
-        {activities.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" className={active === id && panelOpen ? "is-active" : ""} onClick={() => setActivity(id)} title={label} aria-label={label}>
-            <Icon size={20} />
-            <span>{label}</span>
+        <div className="navigation-rail__main">
+          <button className={`rail-item rail-menu-hub ${menusVisible ? "is-active" : ""}`} type="button" onClick={openMenuHub} title="Menú principal">
+            <Menu size={19} />
+            <span>Menú principal</span>
+            {expanded && (menusVisible ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
           </button>
-        ))}
-      </div>
-      <div className="activity-rail__foot">
-        <button type="button" onClick={() => setModal("downloads", true)} title="Aplicaciones Desktop"><CloudDownload size={19} /><span>Descargas</span></button>
-        <button type="button" onClick={() => setModal("settings", true)} title="Preferencias"><Settings size={19} /><span>Ajustes</span></button>
+
+          {expanded && menusVisible && (
+            <div className="rail-menu-stack">
+              <RailMenu id="project" label="Proyecto" icon={FolderKanban} items={projectMenu} open={openMenu === "project"} onToggle={toggleMenu} />
+              <RailMenu id="view" label="Vista" icon={LayoutDashboard} items={viewMenu} open={openMenu === "view"} onToggle={toggleMenu} />
+              <RailMenu id="tools" label="Herramientas" icon={Wrench} items={toolsMenu} open={openMenu === "tools"} onToggle={toggleMenu} />
+              <RailMenu id="help" label="Ayuda" icon={CircleHelp} items={helpMenu} open={openMenu === "help"} onToggle={toggleMenu} />
+            </div>
+          )}
+
+          <button className="rail-item rail-search" type="button" onClick={() => setModal("commandPalette", true)} title="Buscar archivos y órdenes · Ctrl+P">
+            <Search size={19} />
+            <span><b>{project.name}</b><small>Buscar archivos y órdenes</small></span>
+            {expanded && <kbd>Ctrl P</kbd>}
+          </button>
+
+          <div className="rail-divider" />
+          {activities.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={`rail-item ${active === id && panelOpen ? "is-active" : ""}`}
+              onClick={() => setActivity(id)}
+              title={label}
+              aria-label={label}
+            >
+              <Icon size={19} strokeWidth={1.75} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="navigation-rail__foot">
+          <button className="rail-item" type="button" onClick={() => void saveActiveFile()} title="Guardar · Ctrl+S"><Save size={19} /><span>Guardar</span></button>
+          <button className="rail-item" type="button" onClick={() => setModal("downloads", true)} title="Descargar IDE"><CloudDownload size={19} /><span>Descargar IDE</span></button>
+          <button className="rail-item" type="button" onClick={cycleTheme} title={`Cambiar tema · ${settings.theme}`}><Palette size={19} /><span>Tema · {settings.theme}</span></button>
+          <button className="rail-item" type="button" onClick={() => setModal("settings", true)} title="Preferencias · Ctrl+, "><Settings size={19} /><span>Preferencias</span></button>
+          <button className="rail-item rail-run" type="button" disabled={running} onClick={() => void runActiveFile()} title="Ejecutar archivo · F5">
+            {running ? <span className="run-spinner" /> : <Play size={19} fill="currentColor" />}
+            <span>{running ? "Ejecutando…" : "Ejecutar"}</span>
+            {expanded && <kbd>F5</kbd>}
+          </button>
+        </div>
       </div>
     </aside>
   );
@@ -288,9 +318,8 @@ export function MainShell() {
       }}
       onPointerDown={() => setContextMenu(null)}
     >
-      <TopBar />
       <div className="workspace-grid">
-        <ActivityRail />
+        <NavigationRail />
         {leftPanelOpen && <aside className="side-region" style={{ width: leftPanelWidth }}><SidePanel /><button className="resize-handle resize-handle--x" type="button" aria-label="Redimensionar panel" onMouseDown={beginHorizontalResize} /></aside>}
         <main className="workbench">
           <EditorWorkspace />

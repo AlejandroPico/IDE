@@ -1,4 +1,4 @@
-import type { RunResult, ToolchainStatus, WorkspaceProject } from "../core/types";
+import type { RunResult, TerminalResult, ToolchainStatus, WorkspaceProject } from "../core/types";
 import { createId } from "../core/types";
 import { detectLanguage } from "../core/languages";
 
@@ -66,6 +66,9 @@ export const runNativeFile = async (
   language: string,
   content: string
 ): Promise<RunResult> => invokeDesktop<RunResult>("run_source", { root, path, language, content });
+
+export const runNativeTerminalCommand = async (cwd: string | undefined, command: string): Promise<TerminalResult> =>
+  invokeDesktop<TerminalResult>("run_terminal_command", { cwd, command });
 
 export const detachNativeEditor = async (fileId: string, title: string): Promise<void> => {
   await invokeDesktop("open_detached_editor", { fileId, title });

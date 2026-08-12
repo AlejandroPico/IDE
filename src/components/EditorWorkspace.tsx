@@ -85,6 +85,54 @@ const configureMonaco: BeforeMount = (monaco) => {
     ],
     colors: { "editor.background": "#083f66", "editor.foreground": "#eaf8ff", "editorCursor.foreground": "#ffd77d", "editor.selectionBackground": "#2c81ad", "editor.lineHighlightBackground": "#0d4a73", "editorLineNumber.foreground": "#7db4d2" }
   });
+  monaco.editor.defineTheme("ide-graphite", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "7f8a94", fontStyle: "italic" },
+      { token: "keyword", foreground: "e6b96c" },
+      { token: "string", foreground: "9ec58d" },
+      { token: "number", foreground: "c9a6e2" },
+      { token: "type", foreground: "79b9e8" }
+    ],
+    colors: { "editor.background": "#171a1d", "editor.foreground": "#edf1f4", "editorCursor.foreground": "#e6b96c", "editor.selectionBackground": "#66522f88", "editor.lineHighlightBackground": "#202428", "editorLineNumber.foreground": "#626c74" }
+  });
+  monaco.editor.defineTheme("ide-aurora", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "658f9d", fontStyle: "italic" },
+      { token: "keyword", foreground: "65e6d4" },
+      { token: "string", foreground: "f1c46f" },
+      { token: "number", foreground: "a9a2ff" },
+      { token: "type", foreground: "6fc7ff" }
+    ],
+    colors: { "editor.background": "#091823", "editor.foreground": "#e7f7fb", "editorCursor.foreground": "#65e6d4", "editor.selectionBackground": "#164b5888", "editor.lineHighlightBackground": "#0e202d", "editorLineNumber.foreground": "#496f7b" }
+  });
+  monaco.editor.defineTheme("ide-violet", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "927da0", fontStyle: "italic" },
+      { token: "keyword", foreground: "d5a6ff" },
+      { token: "string", foreground: "efc16e" },
+      { token: "number", foreground: "83c8f2" },
+      { token: "type", foreground: "ef9fc1" }
+    ],
+    colors: { "editor.background": "#1b1522", "editor.foreground": "#f5edf9", "editorCursor.foreground": "#d5a6ff", "editor.selectionBackground": "#5a387588", "editor.lineHighlightBackground": "#241b2c", "editorLineNumber.foreground": "#735f7f" }
+  });
+  monaco.editor.defineTheme("ide-sand", {
+    base: "vs",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "887763", fontStyle: "italic" },
+      { token: "keyword", foreground: "b55332" },
+      { token: "string", foreground: "52733e" },
+      { token: "number", foreground: "76578f" },
+      { token: "type", foreground: "376f8d" }
+    ],
+    colors: { "editor.background": "#f0e7d7", "editor.foreground": "#30271d", "editorCursor.foreground": "#b55332", "editor.selectionBackground": "#dca78c99", "editor.lineHighlightBackground": "#e8dcc9", "editorLineNumber.foreground": "#9b8870" }
+  });
 };
 
 const markerSeverity = (monaco: typeof Monaco, severity: CodeDiagnostic["severity"]): Monaco.MarkerSeverity => {
@@ -189,7 +237,18 @@ const CodeEditor = ({ file, detached = false }: { file: IDEFile; detached?: bool
     }
   };
 
-  const theme = settings.theme === "paper" ? "ide-paper" : settings.theme === "blueprint" ? "ide-blueprint" : "ide-obsidian";
+  const resolvedTheme = settings.theme === "auto"
+    ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "paper" : "obsidian")
+    : settings.theme;
+  const theme = ({
+    paper: "ide-paper",
+    sand: "ide-sand",
+    blueprint: "ide-blueprint",
+    graphite: "ide-graphite",
+    aurora: "ide-aurora",
+    violet: "ide-violet",
+    obsidian: "ide-obsidian"
+  } as const)[resolvedTheme];
   return (
     <div
       className={`code-editor ${detached ? "code-editor--detached" : ""}`}

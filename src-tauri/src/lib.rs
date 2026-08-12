@@ -49,6 +49,18 @@ struct RunResult {
     exit_code: Option<i32>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalResult {
+    ok: bool,
+    shell: String,
+    stdout: String,
+    stderr: String,
+    cwd: String,
+    duration_ms: f64,
+    exit_code: Option<i32>,
+}
+
 fn normalized_relative(path: &Path) -> Result<PathBuf, String> {
     let mut safe = PathBuf::new();
     for component in path.components() {
@@ -368,6 +380,112 @@ async fn execute(
     }
 }
 
+const TERMINAL_CWD_MARKER: &str = "__IDE_TERMINAL_CWD__=";
+
+fn terminal_start_directory(cwd: Option<String>) -> Result<PathBuf, String> {
+    let candidate = cwd
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from))
+        .or_else(|| std::env::current_dir().ok())
+        .ok_or_else(|| "No se pudo determinar una carpeta inicial para la terminal".to_string())?;
+    let canonical = candidate
+        .canonicalize()
+        .map_err(|error| format!("No se encuentra la carpeta de la terminal: {error}"))?;
+    if !canonical.is_dir() {
+        return Err("La ruta de trabajo de la terminal no es una carpeta".into());
+    }
+    Ok(canonical)
+}
+
+fn extract_terminal_cwd(stdout: String, fallback: &Path) -> (String, String) {
+    let mut cwd = fallback.to_string_lossy().to_string();
+    let mut visible = Vec::new();
+    for line in stdout.lines() {
+        let clean = line.trim_end_matches('\r');
+        if let Some(value) = clean.strip_prefix(TERMINAL_CWD_MARKER) {
+            if !value.trim().is_empty() {
+                cwd = value.trim().to_string();
+            }
+        } else {
+            visible.push(line);
+        }
+    }
+    (visible.join("\n").trim_end().to_string(), cwd)
+}
+
+#[tauri::command]
+async fn run_terminal_command(cwd: Option<String>, command: String) -> Result<TerminalResult, String> {
+    let command_text = command.trim();
+    if command_text.is_empty() {
+        return Err("El comando está vacío".into());
+    }
+    let working_root = terminal_start_directory(cwd)?;
+    let started = Instant::now();
+    let (program, shell_name, args) = if cfg!(windows) {
+        (
+            "cmd.exe".to_string(),
+            "CMD".to_string(),
+            vec![
+                "/D".to_string(),
+                "/S".to_string(),
+                "/C".to_string(),
+                format!("{command_text}\r\necho {TERMINAL_CWD_MARKER}%CD%"),
+            ],
+        )
+    } else {
+        let shell = if cfg!(target_os = "macos") && Path::new("/bin/zsh").exists() {
+            "/bin/zsh"
+        } else if Path::new("/bin/bash").exists() {
+            "/bin/bash"
+        } else {
+            "/bin/sh"
+        };
+        (
+            shell.to_string(),
+            Path::new(shell).file_name().and_then(OsStr::to_str).unwrap_or("shell").to_string(),
+            vec![
+                "-lc".to_string(),
+                format!("{command_text}\nprintf '\\n{TERMINAL_CWD_MARKER}%s\\n' \"$PWD\""),
+            ],
+        )
+    };
+
+    let mut process = Command::new(&program);
+    process
+        .args(&args)
+        .current_dir(&working_root)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    match timeout(Duration::from_secs(120), process.output()).await {
+        Ok(Ok(output)) => {
+            let (stdout, next_cwd) = extract_terminal_cwd(truncate_output(&output.stdout), &working_root);
+            Ok(TerminalResult {
+                ok: output.status.success(),
+                shell: shell_name,
+                stdout,
+                stderr: truncate_output(&output.stderr),
+                cwd: next_cwd,
+                duration_ms: started.elapsed().as_secs_f64() * 1_000.0,
+                exit_code: output.status.code(),
+            })
+        }
+        Ok(Err(error)) => Err(format!("No se pudo iniciar {shell_name}: {error}")),
+        Err(_) => Ok(TerminalResult {
+            ok: false,
+            shell: shell_name,
+            stdout: String::new(),
+            stderr: "El comando superó 120 segundos y fue detenido.".into(),
+            cwd: working_root.to_string_lossy().to_string(),
+            duration_ms: started.elapsed().as_secs_f64() * 1_000.0,
+            exit_code: None,
+        }),
+    }
+}
+
 fn package_name(code: &str) -> Option<String> {
     code.lines().find_map(|line| {
         let trimmed = line.trim();
@@ -611,6 +729,7 @@ pub fn run() {
             save_text_file,
             detect_toolchains,
             run_source,
+            run_terminal_command,
             open_detached_editor,
             host_platform
         ])

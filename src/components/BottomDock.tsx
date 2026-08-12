@@ -4,18 +4,22 @@ import {
   Clipboard,
   ExternalLink,
   Info,
+  LoaderCircle,
   Maximize2,
   PanelBottomClose,
   Play,
   RotateCw,
+  SendHorizontal,
   TerminalSquare,
   Trash2,
   TriangleAlert
 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { BottomPanelId, CodeDiagnostic } from "../core/types";
 import { selectActiveProject, useIDEStore } from "../store/ideStore";
 import { buildWebPreview } from "../services/runtime";
+import { executeTerminalCommand, TERMINAL_COMMANDS, terminalInitialCwd } from "../services/terminal";
+import { isTauriRuntime } from "../services/desktop";
 
 const panelTabs: Array<{ id: BottomPanelId; label: string }> = [
   { id: "console", label: "Consola" },
@@ -24,17 +28,137 @@ const panelTabs: Array<{ id: BottomPanelId; label: string }> = [
   { id: "output", label: "Salida" }
 ];
 
+const terminalDirectories = new Map<string, string>();
+let terminalHistory: string[] = [];
+
 const ConsolePanel = () => {
   const entries = useIDEStore((state) => state.consoleEntries);
+  const project = useIDEStore(selectActiveProject);
+  const addEntry = useIDEStore((state) => state.addConsoleEntry);
+  const clearConsole = useIDEStore((state) => state.clearConsole);
+  const [command, setCommand] = useState("");
+  const [cwd, setCwd] = useState(() => terminalDirectories.get(project.id) ?? terminalInitialCwd(project));
+  const [busy, setBusy] = useState(false);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const next = terminalDirectories.get(project.id) ?? terminalInitialCwd(project);
+    setCwd(next);
+  }, [project.id, project.nativeRoot, project.name]);
+
+  useEffect(() => {
+    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
+  }, [entries, busy]);
+
+  const prompt = useMemo(() => {
+    const parts = cwd.split(/[\\/]/).filter(Boolean);
+    return parts.at(-1) || (isTauriRuntime() ? cwd : project.name);
+  }, [cwd, project.name]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const value = command.trim();
+    if (!value || busy) return;
+    setCommand("");
+    setHistoryIndex(-1);
+    terminalHistory = [...terminalHistory.filter((item) => item !== value), value].slice(-100);
+    addEntry({ stream: "command", text: `${prompt}  ${value}` });
+    setBusy(true);
+    try {
+      const result = await executeTerminalCommand(value, cwd, project);
+      if (result.clear) clearConsole();
+      if (result.stdout) addEntry({ stream: "stdout", text: result.stdout });
+      if (result.stderr) addEntry({ stream: "stderr", text: result.stderr });
+      if (result.cwd) {
+        setCwd(result.cwd);
+        terminalDirectories.set(project.id, result.cwd);
+      }
+      if (isTauriRuntime()) {
+        addEntry({
+          stream: "system",
+          text: `${result.shell} · ${Math.round(result.durationMs)} ms${result.exitCode !== null && result.exitCode !== undefined ? ` · código ${result.exitCode}` : ""}`
+        });
+      }
+    } catch (error) {
+      addEntry({ stream: "stderr", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  };
+
+  const keyboard = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.ctrlKey && event.key.toLowerCase() === "l") {
+      event.preventDefault();
+      clearConsole();
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!terminalHistory.length) return;
+      const next = historyIndex < 0 ? terminalHistory.length - 1 : Math.max(0, historyIndex - 1);
+      setHistoryIndex(next);
+      setCommand(terminalHistory[next] ?? "");
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (historyIndex < 0) return;
+      const next = historyIndex + 1;
+      if (next >= terminalHistory.length) {
+        setHistoryIndex(-1);
+        setCommand("");
+      } else {
+        setHistoryIndex(next);
+        setCommand(terminalHistory[next] ?? "");
+      }
+      return;
+    }
+    if (event.key === "Tab" && !isTauriRuntime()) {
+      const token = command.trim().toLowerCase();
+      const candidates = [...TERMINAL_COMMANDS, ...Object.values(project.files).map((file) => file.path)];
+      const matches = candidates.filter((item) => item.toLowerCase().startsWith(token));
+      if (matches.length === 1) {
+        event.preventDefault();
+        setCommand(matches[0]!);
+      }
+    }
+  };
+
   return (
-    <div className="console-panel" aria-live="polite">
-      {entries.length ? entries.map((entry) => (
-        <div key={entry.id} className={`console-line console-line--${entry.stream}`}>
-          <span className="console-line__time">{new Date(entry.timestamp).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
-          <span className="console-line__mark">{entry.stream === "command" ? "❯" : entry.stream === "stderr" ? "!" : entry.stream === "system" ? "·" : ""}</span>
-          <pre>{entry.text}</pre>
-        </div>
-      )) : <div className="dock-empty"><TerminalSquare size={26} /><span>La consola está vacía.</span></div>}
+    <div className="console-panel" aria-live="polite" onMouseDown={() => inputRef.current?.focus()}>
+      <div className="terminal-meta">
+        <span><i />{isTauriRuntime() ? (navigator.platform.toLowerCase().includes("win") ? "CMD del sistema" : "Shell del sistema") : "IDE Web Shell"}</span>
+        <code title={cwd}>{cwd}</code>
+        <small>↑↓ historial · Ctrl L limpiar</small>
+      </div>
+      <div className="terminal-transcript" ref={transcriptRef}>
+        {entries.length ? entries.map((entry) => (
+          <div key={entry.id} className={`console-line console-line--${entry.stream}`}>
+            <span className="console-line__time">{new Date(entry.timestamp).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+            <span className="console-line__mark">{entry.stream === "command" ? "❯" : entry.stream === "stderr" ? "!" : entry.stream === "system" ? "·" : ""}</span>
+            <pre>{entry.text}</pre>
+          </div>
+        )) : <div className="dock-empty"><TerminalSquare size={26} /><span>Terminal preparada. Escribe <b>help</b> para ver los comandos.</span></div>}
+      </div>
+      <form className="terminal-input" onSubmit={submit}>
+        <span>{prompt}</span><b>❯</b>
+        <input
+          ref={inputRef}
+          value={command}
+          onChange={(event) => setCommand(event.target.value)}
+          onKeyDown={keyboard}
+          disabled={busy}
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          aria-label="Comando de terminal"
+          placeholder={isTauriRuntime() ? "Escribe un comando del sistema…" : "Escribe help, ls, open, run…"}
+        />
+        <button type="submit" disabled={busy || !command.trim()} title="Ejecutar comando">{busy ? <LoaderCircle className="spin" size={14} /> : <SendHorizontal size={14} />}</button>
+      </form>
     </div>
   );
 };

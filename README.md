@@ -16,6 +16,8 @@ La versión web no es una maqueta: edita proyectos reales, guarda en IndexedDB, 
 |---|---:|---:|
 | Monaco, autocompletado y resaltado | Sí | Sí |
 | Diagnóstico estructural y semántico | Sí | Sí |
+| Navegación lateral contraíble y ocho temas | Sí | Sí |
+| Terminal interactiva | Web Shell virtual | Shell nativa (CMD, Bash o Zsh) |
 | Proyectos simultáneos y búsqueda global | Sí | Sí |
 | Pestañas, divisiones y ventanas internas | Sí | Sí |
 | Editor desacoplado / segundo monitor | Popup + Window Management API | Ventana Tauri nativa |

@@ -1,4 +1,12 @@
-export type ThemeId = "obsidian" | "paper" | "blueprint" | "auto";
+export type ThemeId =
+  | "obsidian"
+  | "graphite"
+  | "aurora"
+  | "violet"
+  | "paper"
+  | "sand"
+  | "blueprint"
+  | "auto";
 
 export type ActivityId =
   | "explorer"
@@ -68,6 +76,17 @@ export interface RunResult {
   durationMs: number;
   previewHtml?: string;
   exitCode?: number | null;
+}
+
+export interface TerminalResult {
+  ok: boolean;
+  shell: string;
+  stdout: string;
+  stderr: string;
+  cwd: string;
+  durationMs: number;
+  exitCode?: number | null;
+  clear?: boolean;
 }
 
 export interface ToolchainStatus {
