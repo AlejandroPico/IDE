@@ -3,12 +3,14 @@ import type * as Monaco from "monaco-editor";
 import {
   Blocks,
   Braces,
+  Check,
   ChevronRight,
   Code2,
   Download,
   ExternalLink,
   FileCode2,
   FolderOpen,
+  GitMerge,
   MoreHorizontal,
   Play,
   Plus,
@@ -23,9 +25,34 @@ import { getLanguageForPath, languageBadge } from "../core/languages";
 import { PROJECT_TEMPLATES } from "../core/templates";
 import { selectActiveProject, useIDEStore } from "../store/ideStore";
 import { openWorkspace, runActiveFile, saveActiveFile } from "../services/ideActions";
+import { runNativeGitAction } from "../services/desktop";
 import { detachEditor } from "../services/windowing";
 
 const EMPTY_DIAGNOSTICS: CodeDiagnostic[] = [];
+
+interface ConflictVersions {
+  current: string;
+  incoming: string;
+  conflicts: number;
+}
+
+const parseConflictVersions = (content: string): ConflictVersions | null => {
+  const lines = content.split("\n");
+  const current: string[] = [];
+  const incoming: string[] = [];
+  let mode: "shared" | "current" | "base" | "incoming" = "shared";
+  let conflicts = 0;
+  for (const line of lines) {
+    if (line.startsWith("<<<<<<<")) { mode = "current"; conflicts += 1; continue; }
+    if (line.startsWith("|||||||")) { mode = "base"; continue; }
+    if (line === "=======") { mode = "incoming"; continue; }
+    if (line.startsWith(">>>>>>>")) { mode = "shared"; continue; }
+    if (mode === "shared") { current.push(line); incoming.push(line); }
+    else if (mode === "current") current.push(line);
+    else if (mode === "incoming") incoming.push(line);
+  }
+  return conflicts ? { current: current.join("\n"), incoming: incoming.join("\n"), conflicts } : null;
+};
 
 const configureMonaco: BeforeMount = (monaco) => {
   monaco.typescript.typescriptDefaults.setEagerModelSync(true);
@@ -353,6 +380,28 @@ const CodeEditor = ({ file, detached = false }: { file: IDEFile; detached?: bool
   );
 };
 
+const ConflictEditor = ({ file, versions }: { file: IDEFile; versions: ConflictVersions }) => {
+  const project = useIDEStore(selectActiveProject);
+  const updateFile = useIDEStore((state) => state.updateFile);
+  const [result, setResult] = useState(versions.current);
+  const resolve = async () => {
+    updateFile(file.id, result);
+    await saveActiveFile();
+    if (project.nativeRoot) await runNativeGitAction(project.nativeRoot, "stage", file.path);
+  };
+  return (
+    <div className="conflict-editor">
+      <header><span><GitMerge size={16} /> Resolución de conflictos</span><small>{versions.conflicts} bloque{versions.conflicts === 1 ? "" : "s"} detectado{versions.conflicts === 1 ? "" : "s"}</small><button type="button" onClick={() => void resolve()}><Check size={14} /> Marcar como resuelto</button></header>
+      <div className="conflict-editor__actions"><button type="button" onClick={() => setResult(versions.current)}>Aceptar versión actual</button><button type="button" onClick={() => setResult(versions.incoming)}>Aceptar versión entrante</button><button type="button" onClick={() => setResult(`${versions.current}\n${versions.incoming}`)}>Conservar ambas</button></div>
+      <div className="conflict-editor__grid">
+        <section><h3>ACTUAL · HEAD</h3><pre>{versions.current}</pre></section>
+        <section><h3>ENTRANTE · MERGE</h3><pre>{versions.incoming}</pre></section>
+        <section className="conflict-editor__result"><h3>RESULTADO EDITABLE</h3><textarea value={result} onChange={(event) => setResult(event.target.value)} spellCheck={false} /></section>
+      </div>
+    </div>
+  );
+};
+
 const WelcomeCanvas = () => {
   const setModal = useIDEStore((state) => state.setModal);
   return (
@@ -399,6 +448,7 @@ const EditorPane = ({ group }: { group: EditorGroup }) => {
   const autoSave = useIDEStore((state) => state.settings.autoSave);
   const [renaming, setRenaming] = useState<string | null>(null);
   const file = group.activeFileId ? project.files[group.activeFileId] : undefined;
+  const conflictVersions = file ? parseConflictVersions(file.content) : null;
   const detach = async () => {
     if (!file) return;
     const opened = await detachEditor(file.id, file.name);
@@ -475,7 +525,7 @@ const EditorPane = ({ group }: { group: EditorGroup }) => {
       {file ? (
         <>
           <div className="breadcrumbs"><span>{project.name}</span>{file.path.split("/").map((part, index) => <span key={`${part}-${index}`}><ChevronRight size={11} />{part}</span>)}<span className="breadcrumbs__language">{getLanguageForPath(file.path).label}</span></div>
-          <CodeEditor file={file} />
+          {conflictVersions ? <ConflictEditor file={file} versions={conflictVersions} /> : <CodeEditor file={file} />}
         </>
       ) : <WelcomeCanvas />}
     </section>

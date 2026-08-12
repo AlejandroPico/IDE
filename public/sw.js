@@ -1,4 +1,4 @@
-const CACHE_NAME = "alejandropico-ide-v5-20260813";
+const CACHE_NAME = "alejandropico-ide-v6-20260812";
 const APP_SHELL = ["./", "./index.html", "./favicon.svg", "./manifest.webmanifest", "./pwa-192x192.png", "./pwa-512x512.png"];
 
 self.addEventListener("install", (event) => {

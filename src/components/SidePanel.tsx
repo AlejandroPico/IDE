@@ -1,10 +1,14 @@
 import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Box,
   Braces,
   ChevronDown,
   ChevronRight,
   CircleCheck,
   CircleDot,
+  Camera,
   CodeXml,
   FilePlus2,
   Folder,
@@ -12,6 +16,8 @@ import {
   FolderPlus,
   Gauge,
   GitBranch,
+  GitCommitHorizontal,
+  GitCompareArrows,
   HardDrive,
   PackageOpen,
   Play,
@@ -24,12 +30,13 @@ import {
   Workflow,
   X
 } from "lucide-react";
-import { useDeferredValue, useMemo, useState, type FormEvent, type MouseEvent } from "react";
-import type { IDEFile, SearchResult } from "../core/types";
+import { useDeferredValue, useEffect, useMemo, useState, type FormEvent, type MouseEvent } from "react";
+import type { GitStatus, IDEFile, SearchResult } from "../core/types";
 import { getLanguage, getLanguageForPath, languageBadge } from "../core/languages";
 import { selectActiveProject, useIDEStore } from "../store/ideStore";
-import { discoverToolchains, isTauriRuntime } from "../services/desktop";
+import { discoverToolchains, getNativeGitStatus, isTauriRuntime, runNativeGitAction } from "../services/desktop";
 import { runActiveFile, saveAllFiles } from "../services/ideActions";
+import { changedSinceSnapshot, createLocalSnapshot, getLocalSnapshots, type LocalSnapshot } from "../services/localHistory";
 
 interface TreeNode {
   name: string;
@@ -107,6 +114,37 @@ const TreeItem = ({ node, depth, expanded, toggle }: {
       <span>{node.name}</span>
       {file?.dirty && <CircleDot className="dirty-dot" size={10} fill="currentColor" />}
     </button>
+  );
+};
+
+const ProjectPanel = () => {
+  const project = useIDEStore(selectActiveProject);
+  const projects = useIDEStore((state) => state.projects);
+  const switchProject = useIDEStore((state) => state.switchProject);
+  const setModal = useIDEStore((state) => state.setModal);
+  const setActivity = useIDEStore((state) => state.setActivity);
+  const files = Object.values(project.files);
+  const folders = new Set(files.flatMap((file) => {
+    const parts = file.path.split("/");
+    return parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join("/"));
+  }));
+  return (
+    <div className="panel-content project-panel">
+      <div className="side-heading"><div><span>PROYECTO ACTIVO</span><strong>{project.name}</strong></div><PackageOpen size={18} /></div>
+      <label className="project-switcher">
+        <span>Espacio de trabajo</span>
+        <select value={project.id} onChange={(event) => switchProject(event.target.value)}>
+          {Object.values(projects).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
+      </label>
+      <div className="metric-grid project-metrics"><div><strong>{files.length}</strong><span>archivos</span></div><div><strong>{folders.size}</strong><span>carpetas</span></div><div><strong>{project.nativeRoot ? "LOCAL" : "WEB"}</strong><span>origen</span></div><div><strong>{new Set(files.map((file) => file.language)).size}</strong><span>lenguajes</span></div></div>
+      <div className="project-panel__actions">
+        <button type="button" onClick={() => setActivity("structure")}><FolderOpen size={16} /><span><strong>Abrir estructura</strong><small>Árbol de carpetas y archivos</small></span><ChevronRight size={14} /></button>
+        <button type="button" onClick={() => setModal("projectWizard", true)}><PackageOpen size={16} /><span><strong>Nuevo proyecto</strong><small>Asistente multilenguaje</small></span><ChevronRight size={14} /></button>
+        <button type="button" onClick={() => setActivity("source")}><GitBranch size={16} /><span><strong>Control de cambios</strong><small>{project.nativeRoot ? "Git y archivos locales" : "Historial local"}</small></span><ChevronRight size={14} /></button>
+      </div>
+      <p className="panel-note">{project.nativeRoot || "Proyecto virtual guardado de forma privada en IndexedDB."}</p>
+    </div>
   );
 };
 
@@ -258,17 +296,84 @@ const SourcePanel = () => {
   const project = useIDEStore(selectActiveProject);
   const openFile = useIDEStore((state) => state.openFile);
   const dirty = Object.values(project.files).filter((file) => file.dirty);
+  const [git, setGit] = useState<GitStatus | null>(null);
+  const [snapshots, setSnapshots] = useState<LocalSnapshot[]>([]);
+  const [busy, setBusy] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [commitMessage, setCommitMessage] = useState("");
+  const desktopGit = isTauriRuntime() && Boolean(project.nativeRoot);
+  const refresh = async () => {
+    if (!desktopGit || !project.nativeRoot) return;
+    setBusy("refresh");
+    try { setGit(await getNativeGitStatus(project.nativeRoot)); }
+    catch (error) { setFeedback(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(""); }
+  };
+  useEffect(() => {
+    setGit(null);
+    setFeedback("");
+    if (desktopGit) void refresh();
+    else void getLocalSnapshots(project.id).then(setSnapshots);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id, project.nativeRoot]);
+  const gitAction = async (action: "stage" | "unstage" | "commit" | "fetch" | "pull" | "push", path?: string) => {
+    if (!project.nativeRoot) return;
+    setBusy(`${action}:${path ?? ""}`);
+    setFeedback("");
+    try {
+      const result = await runNativeGitAction(project.nativeRoot, action, path, commitMessage);
+      setFeedback(result.ok ? result.stdout || "Acción completada." : result.stderr || "Git no pudo completar la acción.");
+      if (result.ok && action === "commit") setCommitMessage("");
+      setGit(await getNativeGitStatus(project.nativeRoot));
+    } catch (error) { setFeedback(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(""); }
+  };
+  const takeSnapshot = async () => {
+    setBusy("snapshot");
+    try { setSnapshots(await createLocalSnapshot(project)); setFeedback("Punto local creado en este dispositivo."); }
+    finally { setBusy(""); }
+  };
+  const openChangedPath = (path: string) => {
+    const file = Object.values(project.files).find((candidate) => candidate.path === path);
+    if (file) openFile(file.id);
+  };
+  const staged = git?.changes.filter((change) => change.staged && !change.conflicted) ?? [];
+  const unstaged = git?.changes.filter((change) => change.worktreeStatus !== " " && !change.conflicted) ?? [];
+  const conflicts = git?.changes.filter((change) => change.conflicted) ?? [];
   return (
     <div className="panel-content source-panel">
-      <div className="side-heading"><div><span>CONTROL DE CAMBIOS</span><strong>Estado del trabajo</strong></div><GitBranch size={18} /></div>
-      <div className="branch-card"><GitBranch size={16} /><div><small>RAMA</small><strong>main</strong></div><span>{project.nativeRoot ? "Repositorio local" : "Sesión virtual"}</span></div>
-      <div className="section-label"><span>CAMBIOS · {dirty.length}</span></div>
-      <div className="changed-files">
-        {dirty.map((file) => <button key={file.id} type="button" onClick={() => openFile(file.id)}><span className="change-mark">M</span><span>{file.path}</span></button>)}
-        {!dirty.length && <div className="empty-panel"><CircleCheck size={28} /><p>Todo está guardado.</p></div>}
-      </div>
-      <button className="primary-wide" type="button" disabled={!dirty.length} onClick={() => void saveAllFiles()}><Save size={15} /> Guardar todos los cambios</button>
-      <p className="panel-note">En la web, cada edición se conserva en IndexedDB. En Desktop, Guardar escribe en el sistema de archivos real.</p>
+      <div className="side-heading"><div><span>CONTROL DE CAMBIOS</span><strong>{desktopGit ? "Git + archivos locales" : "Historial local"}</strong></div>{desktopGit ? <button type="button" onClick={() => void refresh()} title="Actualizar estado"><RefreshCw className={busy === "refresh" ? "spin" : ""} size={16} /></button> : <Camera size={18} />}</div>
+      {desktopGit ? (
+        <>
+          <div className="branch-card"><GitBranch size={16} /><div><small>RAMA</small><strong>{git?.branch || "Detectando…"}</strong></div><span>{git?.upstream || (git?.repository ? "Sin upstream" : "Carpeta local")}</span></div>
+          {git?.repository && <div className="git-sync"><span><ArrowUp size={12} /> {git.ahead} por subir</span><span><ArrowDown size={12} /> {git.behind} por recibir</span><div><button type="button" disabled={Boolean(busy)} onClick={() => void gitAction("fetch")}>Fetch</button><button type="button" disabled={Boolean(busy) || !git.upstream} onClick={() => void gitAction("pull")}>Pull</button><button type="button" disabled={Boolean(busy) || !git.upstream} onClick={() => void gitAction("push")}>Push</button></div></div>}
+          {!git?.repository ? <div className="empty-panel"><GitBranch size={28} /><p>{git?.message || "Comprobando si la carpeta contiene un repositorio Git…"}</p></div> : (
+            <>
+              {conflicts.length > 0 && <><div className="section-label section-label--danger"><span>CONFLICTOS · {conflicts.length}</span></div><div className="changed-files conflict-files">{conflicts.map((change) => <button key={change.path} type="button" onClick={() => openChangedPath(change.path)}><AlertTriangle size={13} /><span>{change.path}</span><small>Abrir resolución</small></button>)}</div></>}
+              <div className="section-label"><span>PREPARADOS · {staged.length}</span></div>
+              <div className="changed-files">{staged.map((change) => <div key={change.path}><button type="button" onClick={() => openChangedPath(change.path)}><span className="change-mark">{change.indexStatus}</span><span>{change.path}</span></button><button type="button" title="Quitar del área de preparación" onClick={() => void gitAction("unstage", change.path)}>−</button></div>)}</div>
+              <form className="git-commit" onSubmit={(event) => { event.preventDefault(); void gitAction("commit"); }}><input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Mensaje del commit" /><button type="submit" disabled={!staged.length || !commitMessage.trim() || Boolean(busy)}><GitCommitHorizontal size={14} /> Commit</button></form>
+              <div className="section-label"><span>CAMBIOS · {unstaged.length}</span></div>
+              <div className="changed-files">{unstaged.map((change) => <div key={change.path}><button type="button" onClick={() => openChangedPath(change.path)}><span className="change-mark">{change.worktreeStatus === "?" ? "U" : change.worktreeStatus}</span><span>{change.path}</span></button><button type="button" title="Preparar archivo" onClick={() => void gitAction("stage", change.path)}>+</button></div>)}</div>
+              {!git.changes.length && <div className="empty-panel"><CircleCheck size={28} /><p>El repositorio está limpio.</p></div>}
+            </>
+          )}
+          {feedback && <p className="git-feedback">{feedback}</p>}
+          <p className="panel-note">Los conflictos se abren como una pestaña de resolución con versión actual, entrante y resultado.</p>
+        </>
+      ) : (
+        <>
+          <div className="branch-card"><HardDrive size={16} /><div><small>ALMACENAMIENTO</small><strong>IndexedDB</strong></div><span>Privado en este dispositivo</span></div>
+          <div className="section-label"><span>CAMBIOS SIN GUARDAR · {dirty.length}</span></div>
+          <div className="changed-files">{dirty.map((file) => <button key={file.id} type="button" onClick={() => openFile(file.id)}><span className="change-mark">M</span><span>{file.path}</span></button>)}{!dirty.length && <div className="empty-panel compact"><CircleCheck size={24} /><p>Todo está guardado.</p></div>}</div>
+          <button className="primary-wide" type="button" disabled={!dirty.length} onClick={() => void saveAllFiles()}><Save size={15} /> Guardar todos los cambios</button>
+          <button className="secondary-wide" type="button" disabled={Boolean(busy)} onClick={() => void takeSnapshot()}><Camera size={15} /> Crear punto local</button>
+          <div className="section-label"><span>PUNTOS LOCALES · {snapshots.length}</span></div>
+          <div className="snapshot-list">{snapshots.map((snapshot) => { const changes = changedSinceSnapshot(project, snapshot); return <article key={snapshot.id}><GitCompareArrows size={15} /><span><strong>{snapshot.label}</strong><small>{new Date(snapshot.createdAt).toLocaleString("es-ES")} · {changes.length} diferencias</small></span><b>{changes.length}</b></article>; })}{!snapshots.length && <p className="panel-note">Crea una instantánea para comparar el proyecto más adelante. Se conservan hasta ocho.</p>}</div>
+          {feedback && <p className="git-feedback">{feedback}</p>}
+          <p className="panel-note">La versión web no simula Git. Para ramas, remotos, commits y conflictos abre una carpeta en IDE Desktop.</p>
+        </>
+      )}
     </div>
   );
 };
@@ -308,9 +413,11 @@ const ArchitecturePanel = () => {
 
 export function SidePanel() {
   const activity = useIDEStore((state) => state.activeActivity);
+  if (activity === "project") return <ProjectPanel />;
+  if (activity === "structure" || activity === "explorer") return <ExplorerPanel />;
   if (activity === "search") return <SearchPanel />;
   if (activity === "run") return <RunPanel />;
   if (activity === "source") return <SourcePanel />;
   if (activity === "architecture") return <ArchitecturePanel />;
-  return <ExplorerPanel />;
+  return <ProjectPanel />;
 }

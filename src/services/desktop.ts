@@ -1,4 +1,4 @@
-import type { RunResult, TerminalResult, ToolchainStatus, WorkspaceProject } from "../core/types";
+import type { GitActionResult, GitStatus, RunResult, TerminalResult, ToolchainStatus, WorkspaceProject } from "../core/types";
 import { createId } from "../core/types";
 import { detectLanguage } from "../core/languages";
 
@@ -69,6 +69,16 @@ export const runNativeFile = async (
 
 export const runNativeTerminalCommand = async (cwd: string | undefined, command: string): Promise<TerminalResult> =>
   invokeDesktop<TerminalResult>("run_terminal_command", { cwd, command });
+
+export const getNativeGitStatus = async (root: string): Promise<GitStatus> =>
+  invokeDesktop<GitStatus>("git_status", { root });
+
+export const runNativeGitAction = async (
+  root: string,
+  action: "stage" | "unstage" | "commit" | "fetch" | "pull" | "push",
+  path?: string,
+  message?: string
+): Promise<GitActionResult> => invokeDesktop<GitActionResult>("run_git_action", { root, action, path, message });
 
 export const detachNativeEditor = async (fileId: string, title: string): Promise<void> => {
   await invokeDesktop("open_detached_editor", { fileId, title });

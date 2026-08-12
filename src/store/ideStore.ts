@@ -130,9 +130,9 @@ export const useIDEStore = create<IDEState>()(
       editorGroups: [createDefaultGroup(firstWelcomeFile.id)],
       activeGroupId: "",
       selectedFileId: firstWelcomeFile.id,
-      activeActivity: "explorer",
+      activeActivity: "structure",
       bottomPanel: "console",
-      leftPanelOpen: true,
+      leftPanelOpen: false,
       bottomPanelOpen: true,
       leftPanelWidth: 290,
       bottomPanelHeight: 220,
@@ -419,7 +419,10 @@ export const useIDEStore = create<IDEState>()(
       }),
 
       setSelectedFile: (fileId) => set({ selectedFileId: fileId }),
-      setActivity: (activity) => set({ activeActivity: activity, leftPanelOpen: true }),
+      setActivity: (activity) => set((state) => ({
+        activeActivity: activity,
+        leftPanelOpen: state.activeActivity === activity ? !state.leftPanelOpen : true
+      })),
       setBottomPanel: (panel, open = true) => set({ bottomPanel: panel, bottomPanelOpen: open }),
       toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen })),
       toggleBottomPanel: () => set((state) => ({ bottomPanelOpen: !state.bottomPanelOpen })),
@@ -455,7 +458,12 @@ export const useIDEStore = create<IDEState>()(
     }),
     {
       name: "alejandropico-ide-state-v1",
-      version: 1,
+      version: 2,
+      migrate: (persistedState, version) => {
+        const state = persistedState as Partial<IDEState>;
+        if (version < 2) return { ...state, activeActivity: "structure", leftPanelOpen: false } as IDEState;
+        return state as IDEState;
+      },
       storage: createJSONStorage(() => indexedDbStorage),
       partialize: (state) => ({
         projects: state.projects,

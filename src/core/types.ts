@@ -13,6 +13,8 @@ export type ThemeId =
   | "auto";
 
 export type ActivityId =
+  | "project"
+  | "structure"
   | "explorer"
   | "search"
   | "run"
@@ -99,6 +101,32 @@ export interface ToolchainStatus {
   executable: string;
   available: boolean;
   version: string;
+}
+
+export interface GitFileChange {
+  path: string;
+  indexStatus: string;
+  worktreeStatus: string;
+  staged: boolean;
+  conflicted: boolean;
+}
+
+export interface GitStatus {
+  available: boolean;
+  repository: boolean;
+  root: string;
+  branch: string;
+  upstream: string;
+  ahead: number;
+  behind: number;
+  changes: GitFileChange[];
+  message: string;
+}
+
+export interface GitActionResult {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
 }
 
 export interface IDESettings {

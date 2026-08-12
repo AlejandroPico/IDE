@@ -61,6 +61,37 @@ struct TerminalResult {
     exit_code: Option<i32>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitFileChange {
+    path: String,
+    index_status: String,
+    worktree_status: String,
+    staged: bool,
+    conflicted: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitStatus {
+    available: bool,
+    repository: bool,
+    root: String,
+    branch: String,
+    upstream: String,
+    ahead: usize,
+    behind: usize,
+    changes: Vec<GitFileChange>,
+    message: String,
+}
+
+#[derive(Serialize)]
+struct GitActionResult {
+    ok: bool,
+    stdout: String,
+    stderr: String,
+}
+
 fn normalized_relative(path: &Path) -> Result<PathBuf, String> {
     let mut safe = PathBuf::new();
     for component in path.components() {
@@ -247,6 +278,148 @@ async fn save_text_file(root: String, path: String, content: String) -> Result<(
     tokio::fs::write(&target, content)
         .await
         .map_err(|error| format!("No se puede escribir el archivo: {error}"))
+}
+
+async fn git_output(root: &Path, args: &[&str]) -> Result<std::process::Output, String> {
+    timeout(
+        Duration::from_secs(90),
+        Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .stdin(Stdio::null())
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .map_err(|_| "Git agotó el tiempo de espera".to_string())?
+    .map_err(|error| format!("No se pudo ejecutar Git: {error}"))
+}
+
+#[tauri::command]
+async fn git_status(root: String) -> Result<GitStatus, String> {
+    let root_path = PathBuf::from(&root)
+        .canonicalize()
+        .map_err(|error| format!("No se encuentra la carpeta del proyecto: {error}"))?;
+    let version = match git_output(&root_path, &["--version"]).await {
+        Ok(output) if output.status.success() => output,
+        _ => return Ok(GitStatus {
+            available: false,
+            repository: false,
+            root,
+            branch: String::new(),
+            upstream: String::new(),
+            ahead: 0,
+            behind: 0,
+            changes: Vec::new(),
+            message: "Git no está instalado o no está disponible en PATH".into(),
+        }),
+    };
+    let version_text = String::from_utf8_lossy(&version.stdout).trim().to_string();
+    let repo = git_output(&root_path, &["rev-parse", "--show-toplevel"]).await?;
+    if !repo.status.success() {
+        return Ok(GitStatus {
+            available: true,
+            repository: false,
+            root,
+            branch: String::new(),
+            upstream: String::new(),
+            ahead: 0,
+            behind: 0,
+            changes: Vec::new(),
+            message: format!("{version_text} · la carpeta no pertenece a un repositorio"),
+        });
+    }
+    let repository_root = String::from_utf8_lossy(&repo.stdout).trim().to_string();
+    let branch_output = git_output(&root_path, &["branch", "--show-current"]).await?;
+    let branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
+    let upstream_output = git_output(&root_path, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).await?;
+    let upstream = if upstream_output.status.success() {
+        String::from_utf8_lossy(&upstream_output.stdout).trim().to_string()
+    } else { String::new() };
+    let mut ahead = 0;
+    let mut behind = 0;
+    if !upstream.is_empty() {
+        let counts = git_output(&root_path, &["rev-list", "--left-right", "--count", "HEAD...@{u}"]).await?;
+        let values: Vec<usize> = String::from_utf8_lossy(&counts.stdout)
+            .split_whitespace()
+            .filter_map(|value| value.parse().ok())
+            .collect();
+        ahead = *values.first().unwrap_or(&0);
+        behind = *values.get(1).unwrap_or(&0);
+    }
+    let status_output = git_output(&root_path, &["status", "--porcelain=v1", "-z", "--untracked-files=all"]).await?;
+    let records: Vec<&[u8]> = status_output.stdout.split(|byte| *byte == 0).filter(|value| !value.is_empty()).collect();
+    let mut changes = Vec::new();
+    let mut index = 0;
+    while index < records.len() {
+        let record = String::from_utf8_lossy(records[index]);
+        if record.len() < 3 { index += 1; continue; }
+        let index_status = record.chars().next().unwrap_or(' ');
+        let worktree_status = record.chars().nth(1).unwrap_or(' ');
+        let path = record[3..].to_string();
+        if matches!(index_status, 'R' | 'C') && index + 1 < records.len() {
+            index += 1;
+        }
+        let pair = format!("{index_status}{worktree_status}");
+        let conflicted = matches!(pair.as_str(), "DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU");
+        changes.push(GitFileChange {
+            path,
+            index_status: index_status.to_string(),
+            worktree_status: worktree_status.to_string(),
+            staged: index_status != ' ' && index_status != '?',
+            conflicted,
+        });
+        index += 1;
+    }
+    Ok(GitStatus {
+        available: true,
+        repository: true,
+        root: repository_root,
+        branch: if branch.is_empty() { "HEAD desacoplado".into() } else { branch },
+        upstream,
+        ahead,
+        behind,
+        changes,
+        message: version_text,
+    })
+}
+
+#[tauri::command]
+async fn run_git_action(
+    root: String,
+    action: String,
+    path: Option<String>,
+    message: Option<String>,
+) -> Result<GitActionResult, String> {
+    let root_path = PathBuf::from(root)
+        .canonicalize()
+        .map_err(|error| format!("No se encuentra la carpeta del proyecto: {error}"))?;
+    let safe_path = path.as_deref().map(|value| normalized_relative(Path::new(value))).transpose()?;
+    let mut owned_args: Vec<String> = match action.as_str() {
+        "stage" => vec!["add".into(), "--".into()],
+        "unstage" => vec!["restore".into(), "--staged".into(), "--".into()],
+        "commit" => {
+            let text = message.unwrap_or_default().trim().to_string();
+            if text.is_empty() { return Err("Escribe un mensaje para el commit".into()); }
+            vec!["commit".into(), "-m".into(), text]
+        }
+        "fetch" => vec!["fetch".into(), "--prune".into()],
+        "pull" => vec!["pull".into(), "--ff-only".into()],
+        "push" => vec!["push".into()],
+        _ => return Err("Acción Git no permitida".into()),
+    };
+    if matches!(action.as_str(), "stage" | "unstage") {
+        let value = safe_path.ok_or_else(|| "Selecciona un archivo".to_string())?;
+        owned_args.push(value.to_string_lossy().to_string());
+    }
+    let args: Vec<&str> = owned_args.iter().map(String::as_str).collect();
+    let output = git_output(&root_path, &args).await?;
+    Ok(GitActionResult {
+        ok: output.status.success(),
+        stdout: truncate_output(String::from_utf8_lossy(&output.stdout).to_string()),
+        stderr: truncate_output(String::from_utf8_lossy(&output.stderr).to_string()),
+    })
 }
 
 async fn version_of(program: &str, args: &[&str]) -> Option<String> {
@@ -727,6 +900,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_workspace,
             save_text_file,
+            git_status,
+            run_git_action,
             detect_toolchains,
             run_source,
             run_terminal_command,

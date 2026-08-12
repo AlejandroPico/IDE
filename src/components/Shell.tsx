@@ -6,6 +6,7 @@ import {
   FileCode2,
   FolderKanban,
   FolderOpen,
+  FolderTree,
   GitBranch,
   PanelBottom,
   Play,
@@ -64,6 +65,7 @@ const ActionMenu = ({ label, items }: ActionMenuProps) => (
 );
 
 const activities: Array<{ id: ActivityId; label: string; icon: ComponentType<{ size?: number; strokeWidth?: number }> }> = [
+  { id: "structure", label: "Estructura", icon: FolderTree },
   { id: "search", label: "Buscar en archivos", icon: Search },
   { id: "run", label: "Diagnóstico", icon: Bug },
   { id: "source", label: "Cambios", icon: GitBranch },
@@ -78,7 +80,15 @@ const NavigationRail = () => {
   const running = useIDEStore((state) => state.running);
   const setActivity = useIDEStore((state) => state.setActivity);
   const setModal = useIDEStore((state) => state.setModal);
-  const toggleRail = () => setExpanded((value) => !value);
+  const toggleLeftPanel = useIDEStore((state) => state.toggleLeftPanel);
+  const toggleRail = () => {
+    if (expanded && panelOpen) toggleLeftPanel();
+    setExpanded((value) => !value);
+  };
+  const selectActivity = (activity: ActivityId) => {
+    setActivity(activity);
+    setExpanded(false);
+  };
 
   const projectMenu: MenuItem[] = [
     { label: "Nuevo proyecto", icon: Plus, shortcut: "Ctrl+N", action: () => setModal("projectWizard", true) },
@@ -111,8 +121,8 @@ const NavigationRail = () => {
           <div className="rail-activity-menu">
             <button
               type="button"
-              className={`rail-item ${active === "explorer" && panelOpen ? "is-active" : ""}`}
-              onClick={() => setActivity("explorer")}
+              className={`rail-item ${active === "project" && panelOpen ? "is-active" : ""}`}
+              onClick={() => selectActivity("project")}
               title="Proyecto · coloca el puntero encima para ver sus acciones"
               aria-label="Proyecto"
               aria-haspopup="menu"
@@ -128,7 +138,7 @@ const NavigationRail = () => {
               key={id}
               type="button"
               className={`rail-item ${active === id && panelOpen ? "is-active" : ""}`}
-              onClick={() => setActivity(id)}
+              onClick={() => selectActivity(id)}
               title={label}
               aria-label={label}
             >
@@ -172,7 +182,7 @@ const StatusBar = () => {
   return (
     <footer className="statusbar">
       <div>
-        <span className="statusbar__branch"><GitBranch size={12} /> main</span>
+        <span className="statusbar__branch"><GitBranch size={12} /> {project.nativeRoot ? "Git local" : "Historial local"}</span>
         <button type="button" onClick={() => setBottomPanel("problems", true)} className={totals.errors ? "has-errors" : ""}>
           <span>× {totals.errors}</span><span>△ {totals.warnings}</span>
         </button>
