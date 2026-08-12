@@ -15,7 +15,7 @@ import {
   Download,
   ExternalLink,
   FileCode2,
-  FolderOpen,
+  Flower2,
   CodeXml as Github,
   Globe2,
   HardDrive,
@@ -23,18 +23,22 @@ import {
   Keyboard,
   Laptop,
   MonitorDown,
+  Moon,
   MoonStar,
   Orbit,
   PackageCheck,
   Palette,
   Play,
+  RefreshCw,
   Search,
   Settings,
   ShieldCheck,
   Sparkles,
+  Snowflake,
   Sun,
   Sunset,
   SwatchBook,
+  Trees,
   Workflow,
   X
 } from "lucide-react";
@@ -43,7 +47,7 @@ import type { GitHubRelease, ProjectTemplate, ThemeId } from "../core/types";
 import { PROJECT_TEMPLATES } from "../core/templates";
 import { getLanguageForPath } from "../core/languages";
 import { selectActiveProject, useIDEStore } from "../store/ideStore";
-import { openWorkspace, runActiveFile, saveActiveFile } from "../services/ideActions";
+import { runActiveFile, saveActiveFile } from "../services/ideActions";
 import { isTauriRuntime } from "../services/desktop";
 
 let deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
@@ -145,8 +149,12 @@ const SettingsModal = () => {
     { id: "graphite", label: "Grafito", icon: SwatchBook },
     { id: "aurora", label: "Aurora", icon: Orbit },
     { id: "violet", label: "Violeta", icon: Sparkles },
+    { id: "midnight", label: "Medianoche", icon: Moon },
+    { id: "forest", label: "Bosque", icon: Trees },
     { id: "paper", label: "Papel", icon: Sun },
     { id: "sand", label: "Arena", icon: Sunset },
+    { id: "rose", label: "Rosa", icon: Flower2 },
+    { id: "arctic", label: "Ártico", icon: Snowflake },
     { id: "blueprint", label: "Plano técnico", icon: Palette },
     { id: "auto", label: "Automático", icon: Laptop }
   ];
@@ -156,6 +164,7 @@ const SettingsModal = () => {
         <section><h3>Apariencia</h3><p>La elección se conserva únicamente en este dispositivo.</p><div className="theme-grid">{themes.map(({ id, label, icon: Icon }) => <button type="button" key={id} className={settings.theme === id ? "is-selected" : ""} onClick={() => update({ theme: id })}><Icon size={19} /><span>{label}</span>{settings.theme === id && <Check size={13} />}</button>)}</div></section>
         <section><h3>Editor</h3><div className="setting-row"><div><strong>Tamaño del texto</strong><small>Tipografía monoespaciada del código</small></div><input type="range" min="11" max="24" value={settings.fontSize} onChange={(event) => update({ fontSize: Number(event.target.value) })} /><output>{settings.fontSize}px</output></div><div className="setting-row"><div><strong>Tamaño de tabulación</strong><small>Espacios insertados al tabular</small></div><select value={settings.tabSize} onChange={(event) => update({ tabSize: Number(event.target.value) })}><option value="2">2 espacios</option><option value="4">4 espacios</option><option value="8">8 espacios</option></select></div></section>
         <section><h3>Comportamiento</h3><Toggle label="Guardado automático" detail="Conserva el archivo 1,1 s después de escribir" value={settings.autoSave} onChange={(value) => update({ autoSave: value })} /><Toggle label="Ajuste de línea" detail="Envuelve las líneas que no caben" value={settings.wordWrap} onChange={(value) => update({ wordWrap: value })} /><Toggle label="Minimapa" detail="Muestra la cartografía lateral del archivo" value={settings.minimap} onChange={(value) => update({ minimap: value })} /><Toggle label="Caracteres invisibles" detail="Muestra espacios y tabulaciones seleccionados" value={settings.showWhitespace} onChange={(value) => update({ showWhitespace: value })} /><Toggle label="Reducir movimiento" detail="Desactiva animaciones y desplazamiento suave" value={settings.reducedMotion} onChange={(value) => update({ reducedMotion: value })} /></section>
+        {isTauriRuntime() && <DesktopUpdateCheck />}
       </div>
       <footer className="modal-footer"><span><ShieldCheck size={14} /> Sin telemetría. Sin cuenta. Sin nube obligatoria.</span><button type="button" className="primary-action" onClick={() => setModal("settings", false)}><Check size={15} /> Listo</button></footer>
     </ModalFrame>
@@ -163,6 +172,44 @@ const SettingsModal = () => {
 };
 
 const Toggle = ({ label, detail, value, onChange }: { label: string; detail: string; value: boolean; onChange: (value: boolean) => void }) => <label className="toggle-row"><span><strong>{label}</strong><small>{detail}</small></span><input type="checkbox" checked={value} onChange={(event) => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
+
+const DESKTOP_VERSION = "0.1.0";
+
+const isNewerVersion = (candidate: string, current: string): boolean => {
+  const parts = (value: string) => value.replace(/^v/i, "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const next = parts(candidate);
+  const installed = parts(current);
+  return [0, 1, 2].some((index) => next[index]! > installed[index]! && next.slice(0, index).every((part, previous) => part === installed[previous]));
+};
+
+const DesktopUpdateCheck = () => {
+  const [status, setStatus] = useState<"idle" | "checking" | "current" | "available" | "error">("idle");
+  const [release, setRelease] = useState<GitHubRelease | null>(null);
+  const check = async () => {
+    setStatus("checking");
+    try {
+      const response = await fetch("https://api.github.com/repos/AlejandroPico/IDE/releases/latest", { headers: { Accept: "application/vnd.github+json" } });
+      if (!response.ok) throw new Error(`GitHub respondió ${response.status}`);
+      const latest = await response.json() as GitHubRelease;
+      setRelease(latest);
+      setStatus(isNewerVersion(latest.tag_name, DESKTOP_VERSION) ? "available" : "current");
+    } catch {
+      setStatus("error");
+    }
+  };
+  return (
+    <section className="settings-update">
+      <h3>Actualizaciones de Desktop</h3>
+      <p>Versión instalada: {DESKTOP_VERSION}. La comprobación consulta únicamente las publicaciones oficiales del proyecto.</p>
+      <div>
+        <button type="button" onClick={() => void check()} disabled={status === "checking"}><RefreshCw className={status === "checking" ? "spin" : ""} size={15} />{status === "checking" ? "Comprobando…" : "Comprobar actualizaciones"}</button>
+        {status === "current" && <span className="is-current"><CircleCheck size={14} /> IDE está actualizado.</span>}
+        {status === "available" && release && <a href={release.html_url} target="_blank" rel="noreferrer">Nueva versión {release.tag_name} <ExternalLink size={12} /></a>}
+        {status === "error" && <span className="is-error">No se pudo consultar GitHub. Inténtalo de nuevo.</span>}
+      </div>
+    </section>
+  );
+};
 
 const detectPlatform = (): "windows" | "macos" | "linux" => {
   const value = `${navigator.userAgent} ${navigator.platform}`.toLowerCase();
@@ -221,8 +268,8 @@ const AboutModal = () => {
   const setModal = useIDEStore((state) => state.setModal);
   return (
     <ModalFrame title="IDE" eyebrow="ENTORNO DE DESARROLLO INTEGRAL" icon={Info} onClose={() => setModal("about", false)} className="about-modal">
-      <div className="about-body"><div className="about-brand"><img src="./favicon.svg" alt="Logotipo de IDE" /><span><b>0.1.0</b><small>PRIMERA EDICIÓN</small></span></div><div><h3>Una herramienta propia para construir otras herramientas.</h3><p>IDE combina un núcleo web estático, ejecución aislada en WebAssembly y una envoltura Tauri/Rust capaz de usar el sistema local. Su interfaz geométrica, sus paneles desacoplables y su modelo de proyectos nacen específicamente para este proyecto.</p><div className="about-stack"><span>React 19</span><span>TypeScript 7</span><span>Vite 8</span><span>Monaco</span><span>Tauri 2.11</span><span>Rust</span><span>Pyodide 314</span></div><div className="about-links"><a href="https://github.com/AlejandroPico/IDE" target="_blank" rel="noreferrer"><Github size={16} /> Código fuente <ExternalLink size={12} /></a><a href="https://alejandropico.github.io/" target="_blank" rel="noreferrer"><Globe2 size={16} /> Portfolio <ExternalLink size={12} /></a></div></div></div>
-      <footer className="modal-footer"><span>Creado para Alejandro Pico · Datos locales por defecto</span><button className="primary-action" type="button" onClick={() => setModal("about", false)}>Cerrar</button></footer>
+      <div className="about-body"><div className="about-brand"><img src="./favicon.svg" alt="Logotipo de IDE" /><span><b>0.1.0</b><small>PRIMERA EDICIÓN</small></span></div><div><h3>Una herramienta propia para construir otras herramientas.</h3><p><strong>IDE es un proyecto de Alejandro Pico.</strong> Combina un núcleo web estático, ejecución aislada en WebAssembly y una envoltura Tauri/Rust capaz de usar el sistema local. Su interfaz, sus paneles desacoplables y su modelo de proyectos se han diseñado específicamente para este entorno.</p><div className="about-stack"><span>React 19</span><span>TypeScript 7</span><span>Vite 8</span><span>Monaco</span><span>Tauri 2.11</span><span>Rust</span><span>Pyodide 314</span></div><div className="about-links"><a href="https://github.com/AlejandroPico/IDE" target="_blank" rel="noreferrer"><Github size={16} /> Repositorio de IDE <ExternalLink size={12} /></a><a href="https://alejandropico.github.io/" target="_blank" rel="noreferrer"><Globe2 size={16} /> Portfolio de Alejandro <ExternalLink size={12} /></a></div></div></div>
+      <footer className="modal-footer"><span>Creado por Alejandro Pico · Código abierto · Datos locales por defecto</span><button className="primary-action" type="button" onClick={() => setModal("about", false)}>Cerrar</button></footer>
     </ModalFrame>
   );
 };
@@ -251,12 +298,8 @@ const CommandPalette = () => {
     ...Object.values(project.files).map((file) => ({ id: `file-${file.id}`, label: file.path, detail: getLanguageForPath(file.path).label, icon: FileCode2, action: () => openFile(file.id) })),
     { id: "run", label: "Ejecutar archivo activo", detail: "F5", icon: Play, action: runActiveFile },
     { id: "save", label: "Guardar archivo activo", detail: "Ctrl S", icon: HardDrive, action: saveActiveFile },
-    { id: "new", label: "Crear proyecto", detail: "Asistente multilenguaje", icon: Sparkles, action: () => setModal("projectWizard", true) },
-    { id: "open", label: "Abrir carpeta", detail: isTauriRuntime() ? "Sistema de archivos local" : "File System Access API", icon: FolderOpen, action: openWorkspace },
     { id: "search", label: "Buscar en el proyecto", detail: "Panel lateral", icon: Search, action: () => setActivity("search") },
-    { id: "problems", label: "Mostrar problemas", detail: "Diagnóstico", icon: Braces, action: () => setBottomPanel("problems", true) },
-    { id: "downloads", label: "Descargar IDE Desktop", detail: "Windows · Linux · macOS", icon: Download, action: () => setModal("downloads", true) },
-    { id: "settings", label: "Abrir preferencias", detail: "Ctrl ,", icon: Settings, action: () => setModal("settings", true) }
+    { id: "problems", label: "Mostrar problemas", detail: "Diagnóstico", icon: Braces, action: () => setBottomPanel("problems", true) }
   ], [openFile, project.files, setActivity, setBottomPanel, setModal]);
   const filtered = commands.filter((command) => `${command.label} ${command.detail}`.toLowerCase().includes(query.replace(/^>/, "").trim().toLowerCase())).slice(0, 18);
   useEffect(() => setSelected(0), [query]);

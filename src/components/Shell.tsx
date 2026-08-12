@@ -2,7 +2,6 @@ import {
   Blocks,
   Boxes,
   Bug,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
   CloudDownload,
@@ -16,8 +15,6 @@ import {
   Keyboard,
   LayoutDashboard,
   LayoutPanelLeft,
-  Menu,
-  Palette,
   PanelBottom,
   Play,
   Plus,
@@ -31,7 +28,7 @@ import {
 } from "lucide-react";
 import type { ComponentType, MouseEvent as ReactMouseEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ActivityId, ThemeId } from "../core/types";
+import type { ActivityId } from "../core/types";
 import { selectActiveProject, useIDEStore } from "../store/ideStore";
 import { exportProjectJson, exportProjectZip } from "../services/projectIO";
 import { importWorkspaceFile, openWorkspace, runActiveFile, saveActiveFile, saveAllFiles } from "../services/ideActions";
@@ -101,24 +98,19 @@ const activities: Array<{ id: ActivityId; label: string; icon: ComponentType<{ s
   { id: "architecture", label: "Arquitectura", icon: Workflow }
 ];
 
-const themeOrder: ThemeId[] = ["obsidian", "graphite", "aurora", "violet", "paper", "sand", "blueprint", "auto"];
-
 const NavigationRail = () => {
   const [expanded, setExpanded] = useState(false);
-  const [menusVisible, setMenusVisible] = useState(false);
   const [openMenu, setOpenMenu] = useState("");
   const surfaceRef = useRef<HTMLDivElement>(null);
   const project = useIDEStore(selectActiveProject);
   const active = useIDEStore((state) => state.activeActivity);
   const panelOpen = useIDEStore((state) => state.leftPanelOpen);
   const running = useIDEStore((state) => state.running);
-  const settings = useIDEStore((state) => state.settings);
   const setActivity = useIDEStore((state) => state.setActivity);
   const setModal = useIDEStore((state) => state.setModal);
   const toggleLeftPanel = useIDEStore((state) => state.toggleLeftPanel);
   const toggleBottomPanel = useIDEStore((state) => state.toggleBottomPanel);
   const splitEditor = useIDEStore((state) => state.splitEditor);
-  const updateSettings = useIDEStore((state) => state.updateSettings);
 
   useEffect(() => {
     const close = (event: PointerEvent) => {
@@ -129,15 +121,6 @@ const NavigationRail = () => {
   }, []);
 
   const toggleMenu = (id: string) => setOpenMenu((current) => current === id ? "" : id);
-  const openMenuHub = () => {
-    if (!expanded) {
-      setExpanded(true);
-      setMenusVisible(true);
-      return;
-    }
-    setMenusVisible((value) => !value);
-    setOpenMenu("");
-  };
   const toggleRail = () => {
     if (expanded) {
       setExpanded(false);
@@ -145,9 +128,7 @@ const NavigationRail = () => {
       return;
     }
     setExpanded(true);
-    setMenusVisible(true);
   };
-  const cycleTheme = () => updateSettings({ theme: themeOrder[(themeOrder.indexOf(settings.theme) + 1) % themeOrder.length] });
 
   const projectMenu: MenuItem[] = [
     { label: "Nuevo proyecto", icon: Plus, shortcut: "Ctrl+N", action: () => setModal("projectWizard", true) },
@@ -165,15 +146,12 @@ const NavigationRail = () => {
     { label: "Paleta de órdenes", icon: Command, shortcut: "Ctrl+Shift+P", separator: true, action: () => setModal("commandPalette", true) }
   ];
   const toolsMenu: MenuItem[] = [
-    { label: "Ejecutar archivo", icon: Play, shortcut: "F5", action: () => void runActiveFile() },
     { label: "Diagnóstico", icon: Bug, action: () => { setActivity("run"); useIDEStore.getState().setBottomPanel("problems", true); } },
-    { label: "Arquitectura", icon: Workflow, action: () => setActivity("architecture") },
-    { label: "Preferencias", icon: Settings, shortcut: "Ctrl+,", separator: true, action: () => setModal("settings", true) }
+    { label: "Arquitectura", icon: Workflow, action: () => setActivity("architecture") }
   ];
   const helpMenu: MenuItem[] = [
-    { label: "Atajos de teclado", icon: Keyboard, action: () => setModal("shortcuts", true) },
-    { label: "Descargas Desktop", icon: CloudDownload, action: () => setModal("downloads", true) },
-    { label: "Acerca del IDE", icon: Info, separator: true, action: () => setModal("about", true) }
+    { label: "Acerca de IDE", icon: Info, action: () => setModal("about", true) },
+    { label: "Atajos de teclado", icon: Keyboard, separator: true, action: () => setModal("shortcuts", true) }
   ];
 
   return (
@@ -183,7 +161,8 @@ const NavigationRail = () => {
           className="rail-brand"
           type="button"
           onClick={toggleRail}
-          title={expanded ? "Plegar navegación" : "Desplegar navegación"}
+          title={expanded ? "Cerrar menú principal" : "Abrir menú principal"}
+          aria-label={expanded ? "Cerrar menú principal" : "Abrir menú principal"}
           aria-expanded={expanded}
         >
           <img src="./favicon.svg" alt="" />
@@ -192,28 +171,17 @@ const NavigationRail = () => {
         </button>
 
         <div className="navigation-rail__main">
-          <button className={`rail-item rail-menu-hub ${menusVisible ? "is-active" : ""}`} type="button" onClick={openMenuHub} title="Menú principal">
-            <Menu size={19} />
-            <span>Menú principal</span>
-            {expanded && (menusVisible ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
-          </button>
-
-          {expanded && menusVisible && (
+          {expanded && (
             <div className="rail-menu-stack">
+              <span className="rail-section-label">MENÚ</span>
               <RailMenu id="project" label="Proyecto" icon={FolderKanban} items={projectMenu} open={openMenu === "project"} onToggle={toggleMenu} />
               <RailMenu id="view" label="Vista" icon={LayoutDashboard} items={viewMenu} open={openMenu === "view"} onToggle={toggleMenu} />
               <RailMenu id="tools" label="Herramientas" icon={Wrench} items={toolsMenu} open={openMenu === "tools"} onToggle={toggleMenu} />
-              <RailMenu id="help" label="Ayuda" icon={CircleHelp} items={helpMenu} open={openMenu === "help"} onToggle={toggleMenu} />
+              <RailMenu id="help" label="Ayuda y acerca de" icon={CircleHelp} items={helpMenu} open={openMenu === "help"} onToggle={toggleMenu} />
             </div>
           )}
 
-          <button className="rail-item rail-search" type="button" onClick={() => setModal("commandPalette", true)} title="Buscar archivos y órdenes · Ctrl+P">
-            <Search size={19} />
-            <span><b>{project.name}</b><small>Buscar archivos y órdenes</small></span>
-            {expanded && <kbd>Ctrl P</kbd>}
-          </button>
-
-          <div className="rail-divider" />
+          {expanded && <span className="rail-section-label rail-section-label--workspace">ESPACIO DE TRABAJO</span>}
           {activities.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -230,9 +198,7 @@ const NavigationRail = () => {
         </div>
 
         <div className="navigation-rail__foot">
-          <button className="rail-item" type="button" onClick={() => void saveActiveFile()} title="Guardar · Ctrl+S"><Save size={19} /><span>Guardar</span></button>
-          <button className="rail-item" type="button" onClick={() => setModal("downloads", true)} title="Descargar IDE"><CloudDownload size={19} /><span>Descargar IDE</span></button>
-          <button className="rail-item" type="button" onClick={cycleTheme} title={`Cambiar tema · ${settings.theme}`}><Palette size={19} /><span>Tema · {settings.theme}</span></button>
+          {!isTauriRuntime() && <button className="rail-item" type="button" onClick={() => setModal("downloads", true)} title="Descargar IDE"><CloudDownload size={19} /><span>Descargar IDE</span></button>}
           <button className="rail-item" type="button" onClick={() => setModal("settings", true)} title="Preferencias · Ctrl+, "><Settings size={19} /><span>Preferencias</span></button>
           <button className="rail-item rail-run" type="button" disabled={running} onClick={() => void runActiveFile()} title="Ejecutar archivo · F5">
             {running ? <span className="run-spinner" /> : <Play size={19} fill="currentColor" />}

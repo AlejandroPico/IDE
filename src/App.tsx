@@ -33,7 +33,7 @@ export default function App() {
       ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "paper" : "obsidian")
       : settings.theme;
     document.documentElement.dataset.theme = resolved;
-    document.documentElement.style.colorScheme = resolved === "paper" || resolved === "sand" ? "light" : "dark";
+    document.documentElement.style.colorScheme = ["paper", "sand", "rose", "arctic"].includes(resolved) ? "light" : "dark";
     document.documentElement.classList.toggle("reduced-motion", settings.reducedMotion);
   }, [settings.theme, settings.reducedMotion]);
 

@@ -73,7 +73,7 @@ const runBrowserCommand = async (commandLine: string, cwd: string, project: Work
   }
   if (command === "theme") {
     const theme = args[0] ?? "";
-    const allowed = ["obsidian", "graphite", "aurora", "violet", "paper", "sand", "blueprint", "auto"] as const;
+    const allowed = ["obsidian", "graphite", "aurora", "violet", "midnight", "forest", "paper", "sand", "rose", "arctic", "blueprint", "auto"] as const;
     if (!allowed.includes(theme as typeof allowed[number])) return browserResult(cwd, "", `Tema desconocido. Disponibles: ${allowed.join(", ")}`);
     useIDEStore.getState().updateSettings({ theme: theme as typeof allowed[number] });
     return browserResult(cwd, `Tema aplicado: ${theme}`);

@@ -3,8 +3,12 @@ export type ThemeId =
   | "graphite"
   | "aurora"
   | "violet"
+  | "midnight"
+  | "forest"
   | "paper"
   | "sand"
+  | "rose"
+  | "arctic"
   | "blueprint"
   | "auto";
 

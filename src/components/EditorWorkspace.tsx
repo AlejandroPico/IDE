@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Play,
   Plus,
+  Save,
   Sparkles,
   SplitSquareHorizontal,
   X
@@ -120,6 +121,54 @@ const configureMonaco: BeforeMount = (monaco) => {
       { token: "type", foreground: "ef9fc1" }
     ],
     colors: { "editor.background": "#1b1522", "editor.foreground": "#f5edf9", "editorCursor.foreground": "#d5a6ff", "editor.selectionBackground": "#5a387588", "editor.lineHighlightBackground": "#241b2c", "editorLineNumber.foreground": "#735f7f" }
+  });
+  monaco.editor.defineTheme("ide-midnight", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "71819a", fontStyle: "italic" },
+      { token: "keyword", foreground: "82b4ff" },
+      { token: "string", foreground: "9ad6b4" },
+      { token: "number", foreground: "e3a6d9" },
+      { token: "type", foreground: "6fd6e8" }
+    ],
+    colors: { "editor.background": "#09111f", "editor.foreground": "#e7eefb", "editorCursor.foreground": "#82b4ff", "editor.selectionBackground": "#294b7c88", "editor.lineHighlightBackground": "#0e192a", "editorLineNumber.foreground": "#53637d" }
+  });
+  monaco.editor.defineTheme("ide-forest", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "708875", fontStyle: "italic" },
+      { token: "keyword", foreground: "8ed09a" },
+      { token: "string", foreground: "d7bd72" },
+      { token: "number", foreground: "caa3e6" },
+      { token: "type", foreground: "72bfd0" }
+    ],
+    colors: { "editor.background": "#0d1710", "editor.foreground": "#e5f0e5", "editorCursor.foreground": "#8ed09a", "editor.selectionBackground": "#315c3888", "editor.lineHighlightBackground": "#132018", "editorLineNumber.foreground": "#506757" }
+  });
+  monaco.editor.defineTheme("ide-rose", {
+    base: "vs",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "927d82", fontStyle: "italic" },
+      { token: "keyword", foreground: "a83f66" },
+      { token: "string", foreground: "6a7b3f" },
+      { token: "number", foreground: "7752a0" },
+      { token: "type", foreground: "3e7288" }
+    ],
+    colors: { "editor.background": "#fff6f7", "editor.foreground": "#35282c", "editorCursor.foreground": "#a83f66", "editor.selectionBackground": "#efc3d0aa", "editor.lineHighlightBackground": "#f8ecef", "editorLineNumber.foreground": "#aa9298" }
+  });
+  monaco.editor.defineTheme("ide-arctic", {
+    base: "vs",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "718992", fontStyle: "italic" },
+      { token: "keyword", foreground: "176b8b" },
+      { token: "string", foreground: "46765b" },
+      { token: "number", foreground: "66519a" },
+      { token: "type", foreground: "297c86" }
+    ],
+    colors: { "editor.background": "#f2f9fb", "editor.foreground": "#1b3038", "editorCursor.foreground": "#176b8b", "editor.selectionBackground": "#b4dde8aa", "editor.lineHighlightBackground": "#e8f4f7", "editorLineNumber.foreground": "#7e9ca5" }
   });
   monaco.editor.defineTheme("ide-sand", {
     base: "vs",
@@ -247,6 +296,10 @@ const CodeEditor = ({ file, detached = false }: { file: IDEFile; detached?: bool
     graphite: "ide-graphite",
     aurora: "ide-aurora",
     violet: "ide-violet",
+    midnight: "ide-midnight",
+    forest: "ide-forest",
+    rose: "ide-rose",
+    arctic: "ide-arctic",
     obsidian: "ide-obsidian"
   } as const)[resolvedTheme];
   return (
@@ -343,12 +396,17 @@ const EditorPane = ({ group }: { group: EditorGroup }) => {
   const renameFile = useIDEStore((state) => state.renameFile);
   const setContextMenu = useIDEStore((state) => state.setContextMenu);
   const openFloatingWindow = useIDEStore((state) => state.openFloatingWindow);
+  const autoSave = useIDEStore((state) => state.settings.autoSave);
   const [renaming, setRenaming] = useState<string | null>(null);
   const file = group.activeFileId ? project.files[group.activeFileId] : undefined;
   const detach = async () => {
     if (!file) return;
     const opened = await detachEditor(file.id, file.name);
     if (!opened) openFloatingWindow({ title: file.name, kind: "editor", fileId: file.id, x: 160, y: 100, width: 820, height: 580, minimized: false, maximized: false });
+  };
+  const saveTab = async (fileId: string) => {
+    openFile(fileId, group.id);
+    await saveActiveFile();
   };
   return (
     <section className={`editor-pane ${group.id === activeGroupId ? "is-active" : ""}`} onPointerDown={() => setActiveGroup(group.id)}>
@@ -359,12 +417,17 @@ const EditorPane = ({ group }: { group: EditorGroup }) => {
             if (!tabFile) return null;
             const language = getLanguageForPath(tabFile.path);
             return (
-              <button
-                type="button"
+              <div
                 key={fileId}
                 className={`editor-tab ${group.activeFileId === fileId ? "is-active" : ""}`}
                 onClick={() => openFile(fileId, group.id)}
                 onDoubleClick={() => setRenaming(fileId)}
+                role="tab"
+                tabIndex={0}
+                aria-selected={group.activeFileId === fileId}
+                onKeyDown={(event) => {
+                  if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) openFile(fileId, group.id);
+                }}
                 onContextMenu={(event) => {
                   event.preventDefault();
                   setContextMenu({ x: event.clientX, y: event.clientY, scope: "tab", targetId: fileId, targetPath: tabFile.path });
@@ -383,16 +446,22 @@ const EditorPane = ({ group }: { group: EditorGroup }) => {
                     }}
                   />
                 ) : <span>{tabFile.name}</span>}
-                {tabFile.dirty && <i className="tab-dirty" />}
-                <span
+                {tabFile.dirty && (autoSave
+                  ? <i className="tab-dirty" title="El autoguardado está procesando los cambios" />
+                  : <button
+                    className="tab-save"
+                    type="button"
+                    aria-label={`Guardar ${tabFile.name}`}
+                    title={`Guardar ${tabFile.name}`}
+                    onClick={(event) => { event.stopPropagation(); void saveTab(fileId); }}
+                  ><Save size={12} /></button>)}
+                <button
                   className="tab-close"
-                  role="button"
-                  tabIndex={0}
+                  type="button"
                   aria-label={`Cerrar ${tabFile.name}`}
                   onClick={(event) => { event.stopPropagation(); closeTab(fileId, group.id); }}
-                  onKeyDown={(event) => event.key === "Enter" && closeTab(fileId, group.id)}
-                ><X size={12} /></span>
-              </button>
+                ><X size={12} /></button>
+              </div>
             );
           })}
         </div>
