@@ -173,7 +173,7 @@ const SettingsModal = () => {
 
 const Toggle = ({ label, detail, value, onChange }: { label: string; detail: string; value: boolean; onChange: (value: boolean) => void }) => <label className="toggle-row"><span><strong>{label}</strong><small>{detail}</small></span><input type="checkbox" checked={value} onChange={(event) => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
 
-const DESKTOP_VERSION = "0.1.0";
+const DESKTOP_VERSION = "0.2.0";
 
 const isNewerVersion = (candidate: string, current: string): boolean => {
   const parts = (value: string) => value.replace(/^v/i, "").split(".").map((part) => Number.parseInt(part, 10) || 0);
@@ -268,7 +268,7 @@ const AboutModal = () => {
   const setModal = useIDEStore((state) => state.setModal);
   return (
     <ModalFrame title="IDE" eyebrow="ENTORNO DE DESARROLLO INTEGRAL" icon={Info} onClose={() => setModal("about", false)} className="about-modal">
-      <div className="about-body"><div className="about-brand"><img src="./favicon.svg" alt="Logotipo de IDE" /><span><b>0.1.0</b><small>PRIMERA EDICIÓN</small></span></div><div><h3>Una herramienta propia para construir otras herramientas.</h3><p><strong>IDE es un proyecto de Alejandro Pico.</strong> Combina un núcleo web estático, ejecución aislada en WebAssembly y una envoltura Tauri/Rust capaz de usar el sistema local. Su interfaz, sus paneles desacoplables y su modelo de proyectos se han diseñado específicamente para este entorno.</p><div className="about-stack"><span>React 19</span><span>TypeScript 7</span><span>Vite 8</span><span>Monaco</span><span>Tauri 2.11</span><span>Rust</span><span>Pyodide 314</span></div><div className="about-links"><a href="https://github.com/AlejandroPico/IDE" target="_blank" rel="noreferrer"><Github size={16} /> Repositorio de IDE <ExternalLink size={12} /></a><a href="https://alejandropico.github.io/" target="_blank" rel="noreferrer"><Globe2 size={16} /> Portfolio de Alejandro <ExternalLink size={12} /></a></div></div></div>
+      <div className="about-body"><div className="about-brand"><img src="./favicon.svg" alt="Logotipo de IDE" /><span><b>0.2.0</b><small>EDICIÓN MINIMALISTA</small></span></div><div><h3>Una herramienta propia para construir otras herramientas.</h3><p><strong>IDE es un proyecto de Alejandro Pico.</strong> Combina un núcleo web estático, ejecución aislada en WebAssembly y una envoltura Tauri/Rust capaz de usar el sistema local. Su interfaz, sus paneles desacoplables y su modelo de proyectos se han diseñado específicamente para este entorno.</p><div className="about-stack"><span>React 19</span><span>TypeScript 7</span><span>Vite 8</span><span>Monaco</span><span>Tauri 2.11</span><span>Rust</span><span>Pyodide 314</span></div><div className="about-links"><a href="https://github.com/AlejandroPico/IDE" target="_blank" rel="noreferrer"><Github size={16} /> Repositorio de IDE <ExternalLink size={12} /></a><a href="https://alejandropico.github.io/" target="_blank" rel="noreferrer"><Globe2 size={16} /> Portfolio de Alejandro <ExternalLink size={12} /></a></div></div></div>
       <footer className="modal-footer"><span>Creado por Alejandro Pico · Código abierto · Datos locales por defecto</span><button className="primary-action" type="button" onClick={() => setModal("about", false)}>Cerrar</button></footer>
     </ModalFrame>
   );
