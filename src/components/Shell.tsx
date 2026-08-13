@@ -58,35 +58,38 @@ const NavigationRail = ({ onResize }: { onResize: (event: ReactMouseEvent) => vo
           <ChevronRight size={14} />
         </button>
 
-        <div className="navigation-rail__main">
-          <button type="button" className={`rail-item ${active === "project" && panelOpen ? "is-active" : ""}`} onClick={() => setActivity("project")} title="Proyecto" aria-label="Proyecto">
-            <FolderKanban size={19} strokeWidth={1.75} /><span>Proyecto</span>
-          </button>
-          {activities.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              className={`rail-item ${active === id && panelOpen ? "is-active" : ""}`}
-              onClick={() => setActivity(id)}
-              title={label}
-              aria-label={label}
-            >
-              <Icon size={19} strokeWidth={1.75} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+        <div className="navigation-rail__body">
+          <div className="navigation-rail__activity">
+            <div className="navigation-rail__main">
+              <button type="button" className={`rail-item ${active === "project" && panelOpen ? "is-active" : ""}`} onClick={() => setActivity("project")} title="Proyecto" aria-label="Proyecto">
+                <FolderKanban size={19} strokeWidth={1.75} /><span>Proyecto</span>
+              </button>
+              {activities.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`rail-item ${active === id && panelOpen ? "is-active" : ""}`}
+                  onClick={() => setActivity(id)}
+                  title={label}
+                  aria-label={label}
+                >
+                  <Icon size={19} strokeWidth={1.75} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
 
-        {panelOpen && <div className="navigation-rail__panel"><SidePanel /></div>}
+            <div className="navigation-rail__foot">
+              {!isTauriRuntime() && <button className="rail-item" type="button" onClick={() => setModal("downloads", true)} title="Descargar IDE"><CloudDownload size={19} /><span>Descargar IDE</span></button>}
+              <button className="rail-item" type="button" onClick={() => setModal("settings", true)} title="Preferencias · Ctrl+, "><Settings size={19} /><span>Preferencias</span></button>
+              <button className="rail-item rail-run" type="button" disabled={running} onClick={() => void runActiveFile()} title="Ejecutar archivo · F5">
+                {running ? <span className="run-spinner" /> : <Play size={19} fill="currentColor" />}
+                <span>{running ? "Ejecutando…" : "Ejecutar"}</span>
+              </button>
+            </div>
+          </div>
 
-        <div className="navigation-rail__foot">
-          {!isTauriRuntime() && <button className="rail-item" type="button" onClick={() => setModal("downloads", true)} title="Descargar IDE"><CloudDownload size={19} /><span>Descargar IDE</span></button>}
-          <button className="rail-item" type="button" onClick={() => setModal("settings", true)} title="Preferencias · Ctrl+, "><Settings size={19} /><span>Preferencias</span></button>
-          <button className="rail-item rail-run" type="button" disabled={running} onClick={() => void runActiveFile()} title="Ejecutar archivo · F5">
-            {running ? <span className="run-spinner" /> : <Play size={19} fill="currentColor" />}
-            <span>{running ? "Ejecutando…" : "Ejecutar"}</span>
-            {panelOpen && <kbd>F5</kbd>}
-          </button>
+          {panelOpen && <div className="navigation-rail__panel"><SidePanel /></div>}
         </div>
         {panelOpen && <button className="resize-handle resize-handle--x" type="button" aria-label="Redimensionar panel" onMouseDown={onResize} />}
       </div>
