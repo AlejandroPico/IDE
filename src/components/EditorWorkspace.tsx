@@ -459,7 +459,7 @@ const EditorPane = ({ group }: { group: EditorGroup }) => {
     await saveActiveFile();
   };
   return (
-    <section className={`editor-pane ${group.id === activeGroupId ? "is-active" : ""}`} onPointerDown={() => setActiveGroup(group.id)}>
+    <section className={`editor-pane ${group.id === activeGroupId ? "is-active" : ""} ${file ? "" : "is-empty"}`} onPointerDown={() => setActiveGroup(group.id)}>
       <div className="tabbar">
         <div className="tabbar__tabs">
           {group.tabs.map((fileId) => {
@@ -534,6 +534,17 @@ const EditorPane = ({ group }: { group: EditorGroup }) => {
 
 export function EditorWorkspace() {
   const groups = useIDEStore((state) => state.editorGroups);
+  const project = useIDEStore(selectActiveProject);
+  const hasOpenTabs = groups.some((group) => group.tabs.some((fileId) => Boolean(project.files[fileId])));
+
+  if (!hasOpenTabs) {
+    return (
+      <div className="editor-workspace editor-workspace--empty" aria-label="No hay pestañas abiertas">
+        <WelcomeCanvas />
+      </div>
+    );
+  }
+
   return (
     <div className={`editor-workspace editor-workspace--${groups.length}`}>
       {groups.map((group) => <EditorPane key={group.id} group={group} />)}

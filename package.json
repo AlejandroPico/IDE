@@ -1,7 +1,7 @@
 {
   "name": "alejandropico-ide",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "description": "IDE híbrido, multilenguaje y multiplataforma para web y escritorio.",
   "author": "Alejandro Pico",

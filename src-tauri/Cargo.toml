@@ -1,6 +1,6 @@
 [package]
 name = "alejandropico-ide"
-version = "0.3.2"
+version = "0.3.3"
 description = "IDE híbrido multilenguaje para web y escritorio"
 authors = ["Alejandro Pico"]
 edition = "2024"
