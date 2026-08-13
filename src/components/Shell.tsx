@@ -2,28 +2,21 @@ import {
   Bug,
   ChevronRight,
   CloudDownload,
-  FileArchive,
-  FileCode2,
   FolderKanban,
-  FolderOpen,
   FolderTree,
   GitBranch,
   PanelBottom,
   Play,
-  Plus,
-  Save,
   Search,
   Settings,
   Sparkles,
-  Upload,
   Workflow
 } from "lucide-react";
 import type { ComponentType, MouseEvent as ReactMouseEvent } from "react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ActivityId } from "../core/types";
 import { selectActiveProject, useIDEStore } from "../store/ideStore";
-import { exportProjectJson, exportProjectZip } from "../services/projectIO";
-import { importWorkspaceFile, openWorkspace, runActiveFile, saveActiveFile, saveAllFiles } from "../services/ideActions";
+import { runActiveFile } from "../services/ideActions";
 import { isTauriRuntime } from "../services/desktop";
 import { SidePanel } from "./SidePanel";
 import { EditorWorkspace } from "./EditorWorkspace";
@@ -31,38 +24,6 @@ import { BottomDock } from "./BottomDock";
 import { ContextMenu } from "./ContextMenu";
 import { FloatingWindows } from "./FloatingWindows";
 import { AllModals } from "./Modals";
-
-interface MenuItem {
-  label: string;
-  icon?: ComponentType<{ size?: number }>;
-  shortcut?: string;
-  action: () => void;
-  danger?: boolean;
-  separator?: boolean;
-}
-
-interface ActionMenuProps {
-  label: string;
-  items: MenuItem[];
-}
-
-const ActionMenu = ({ label, items }: ActionMenuProps) => (
-  <div className="rail-menu__popover" role="menu" aria-label={`Acciones de ${label}`}>
-    <header><span>{label}</span><small>ACCIONES</small></header>
-    {items.map((item, index) => {
-      const ItemIcon = item.icon;
-      return (
-        <div key={`${item.label}-${index}`}>
-          {item.separator && <div className="menu-separator" />}
-          <button type="button" role="menuitem" className={item.danger ? "danger" : ""} onClick={item.action}>
-            <span>{ItemIcon && <ItemIcon size={15} />}{item.label}</span>
-            {item.shortcut && <kbd>{item.shortcut}</kbd>}
-          </button>
-        </div>
-      );
-    })}
-  </div>
-);
 
 const activities: Array<{ id: ActivityId; label: string; icon: ComponentType<{ size?: number; strokeWidth?: number }> }> = [
   { id: "structure", label: "Estructura", icon: FolderTree },
@@ -72,44 +33,25 @@ const activities: Array<{ id: ActivityId; label: string; icon: ComponentType<{ s
   { id: "architecture", label: "Arquitectura", icon: Workflow }
 ];
 
-const NavigationRail = () => {
-  const [expanded, setExpanded] = useState(false);
-  const project = useIDEStore(selectActiveProject);
+const NavigationRail = ({ onResize }: { onResize: (event: ReactMouseEvent) => void }) => {
   const active = useIDEStore((state) => state.activeActivity);
   const panelOpen = useIDEStore((state) => state.leftPanelOpen);
+  const panelWidth = useIDEStore((state) => state.leftPanelWidth);
   const running = useIDEStore((state) => state.running);
   const setActivity = useIDEStore((state) => state.setActivity);
   const setModal = useIDEStore((state) => state.setModal);
   const toggleLeftPanel = useIDEStore((state) => state.toggleLeftPanel);
-  const toggleRail = () => {
-    if (expanded && panelOpen) toggleLeftPanel();
-    setExpanded((value) => !value);
-  };
-  const selectActivity = (activity: ActivityId) => {
-    setActivity(activity);
-    setExpanded(false);
-  };
-
-  const projectMenu: MenuItem[] = [
-    { label: "Nuevo proyecto", icon: Plus, shortcut: "Ctrl+N", action: () => setModal("projectWizard", true) },
-    { label: "Abrir carpeta", icon: FolderOpen, shortcut: "Ctrl+O", action: () => void openWorkspace() },
-    { label: "Importar .ide.json", icon: Upload, action: () => void importWorkspaceFile() },
-    { label: "Guardar", icon: Save, shortcut: "Ctrl+S", separator: true, action: () => void saveActiveFile() },
-    { label: "Guardar todo", icon: Save, shortcut: "Ctrl+Alt+S", action: () => void saveAllFiles() },
-    { label: "Exportar proyecto", icon: FileCode2, separator: true, action: () => exportProjectJson(project) },
-    { label: "Exportar ZIP", icon: FileArchive, action: () => void exportProjectZip(project) }
-  ];
 
   return (
-    <aside className={`navigation-rail ${expanded ? "is-expanded" : ""}`} aria-label="Navegación principal">
+    <aside className={`navigation-rail ${panelOpen ? "is-expanded" : ""}`} style={panelOpen ? { width: panelWidth } : undefined} aria-label="Navegación principal">
       <div className="navigation-rail__surface">
         <button
           className="rail-brand"
           type="button"
-          onClick={toggleRail}
-          title={expanded ? "Cerrar menú principal" : "Abrir menú principal"}
-          aria-label={expanded ? "Cerrar menú principal" : "Abrir menú principal"}
-          aria-expanded={expanded}
+          onClick={toggleLeftPanel}
+          title={panelOpen ? "Contraer panel lateral" : "Abrir panel lateral"}
+          aria-label={panelOpen ? "Contraer panel lateral" : "Abrir panel lateral"}
+          aria-expanded={panelOpen}
         >
           <img src="./favicon.svg" alt="" />
           <span><strong>IDE</strong><small>{isTauriRuntime() ? "DESKTOP" : "WEB"}</small></span>
@@ -117,28 +59,15 @@ const NavigationRail = () => {
         </button>
 
         <div className="navigation-rail__main">
-          {expanded && <span className="rail-section-label rail-section-label--workspace">ESPACIO DE TRABAJO</span>}
-          <div className="rail-activity-menu">
-            <button
-              type="button"
-              className={`rail-item ${active === "project" && panelOpen ? "is-active" : ""}`}
-              onClick={() => selectActivity("project")}
-              title="Proyecto · coloca el puntero encima para ver sus acciones"
-              aria-label="Proyecto"
-              aria-haspopup="menu"
-            >
-              <FolderKanban size={19} strokeWidth={1.75} />
-              <span>Proyecto</span>
-              {expanded && <ChevronRight className="rail-item__chevron" size={13} />}
-            </button>
-            <ActionMenu label="Proyecto" items={projectMenu} />
-          </div>
+          <button type="button" className={`rail-item ${active === "project" && panelOpen ? "is-active" : ""}`} onClick={() => setActivity("project")} title="Proyecto" aria-label="Proyecto">
+            <FolderKanban size={19} strokeWidth={1.75} /><span>Proyecto</span>
+          </button>
           {activities.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
               className={`rail-item ${active === id && panelOpen ? "is-active" : ""}`}
-              onClick={() => selectActivity(id)}
+              onClick={() => setActivity(id)}
               title={label}
               aria-label={label}
             >
@@ -148,15 +77,18 @@ const NavigationRail = () => {
           ))}
         </div>
 
+        {panelOpen && <div className="navigation-rail__panel"><SidePanel /></div>}
+
         <div className="navigation-rail__foot">
           {!isTauriRuntime() && <button className="rail-item" type="button" onClick={() => setModal("downloads", true)} title="Descargar IDE"><CloudDownload size={19} /><span>Descargar IDE</span></button>}
           <button className="rail-item" type="button" onClick={() => setModal("settings", true)} title="Preferencias · Ctrl+, "><Settings size={19} /><span>Preferencias</span></button>
           <button className="rail-item rail-run" type="button" disabled={running} onClick={() => void runActiveFile()} title="Ejecutar archivo · F5">
             {running ? <span className="run-spinner" /> : <Play size={19} fill="currentColor" />}
             <span>{running ? "Ejecutando…" : "Ejecutar"}</span>
-            {expanded && <kbd>F5</kbd>}
+            {panelOpen && <kbd>F5</kbd>}
           </button>
         </div>
+        {panelOpen && <button className="resize-handle resize-handle--x" type="button" aria-label="Redimensionar panel" onMouseDown={onResize} />}
       </div>
     </aside>
   );
@@ -209,7 +141,6 @@ const StatusBar = () => {
 };
 
 export function MainShell() {
-  const leftPanelOpen = useIDEStore((state) => state.leftPanelOpen);
   const leftPanelWidth = useIDEStore((state) => state.leftPanelWidth);
   const bottomPanelOpen = useIDEStore((state) => state.bottomPanelOpen);
   const bottomPanelHeight = useIDEStore((state) => state.bottomPanelHeight);
@@ -246,8 +177,7 @@ export function MainShell() {
       onPointerDown={() => setContextMenu(null)}
     >
       <div className="workspace-grid">
-        <NavigationRail />
-        {leftPanelOpen && <aside className="side-region" style={{ width: leftPanelWidth }}><SidePanel /><button className="resize-handle resize-handle--x" type="button" aria-label="Redimensionar panel" onMouseDown={beginHorizontalResize} /></aside>}
+        <NavigationRail onResize={beginHorizontalResize} />
         <main className="workbench">
           <EditorWorkspace />
           {bottomPanelOpen && <section className="bottom-region" style={{ height: bottomPanelHeight }}><button className="resize-handle resize-handle--y" type="button" aria-label="Redimensionar panel inferior" onMouseDown={beginVerticalResize} /><BottomDock /></section>}

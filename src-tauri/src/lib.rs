@@ -233,8 +233,42 @@ fn scan_workspace(root: &Path) -> Result<Vec<NativeFile>, String> {
     Ok(files)
 }
 
+fn looks_like_project_root(root: &Path) -> bool {
+    [
+        ".git", "package.json", "pom.xml", "build.gradle", "build.gradle.kts",
+        "settings.gradle", "settings.gradle.kts", "Cargo.toml", "pyproject.toml",
+        "requirements.txt", "go.mod", "composer.json", "Gemfile", "Makefile",
+        "CMakeLists.txt", ".ide-project.json",
+    ]
+    .iter()
+    .any(|marker| root.join(marker).exists())
+        || std::fs::read_dir(root)
+            .ok()
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .any(|entry| entry.path().extension().and_then(OsStr::to_str) == Some("sln")
+                || entry.path().extension().and_then(OsStr::to_str) == Some("csproj"))
+}
+
+fn discover_project_roots(root: &Path) -> Vec<PathBuf> {
+    if looks_like_project_root(root) {
+        return vec![root.to_path_buf()];
+    }
+    let mut projects: Vec<PathBuf> = std::fs::read_dir(root)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir() && looks_like_project_root(path))
+        .collect();
+    projects.sort_by_key(|path| path.file_name().map(|name| name.to_os_string()));
+    if projects.is_empty() { vec![root.to_path_buf()] } else { projects }
+}
+
 #[tauri::command]
-async fn open_workspace() -> Result<Option<NativeWorkspace>, String> {
+async fn open_workspace() -> Result<Option<Vec<NativeWorkspace>>, String> {
     let Some(folder) = rfd::AsyncFileDialog::new()
         .set_title("Abrir espacio de trabajo en IDE")
         .pick_folder()
@@ -242,18 +276,20 @@ async fn open_workspace() -> Result<Option<NativeWorkspace>, String> {
     else {
         return Ok(None);
     };
-    let root = folder.path().to_path_buf();
-    let name = root
-        .file_name()
-        .and_then(OsStr::to_str)
-        .unwrap_or("Proyecto")
-        .to_string();
-    let files = scan_workspace(&root)?;
-    Ok(Some(NativeWorkspace {
-        root: root.to_string_lossy().to_string(),
-        name,
-        files,
-    }))
+    let selected_root = folder.path().to_path_buf();
+    let workspaces = discover_project_roots(&selected_root)
+        .into_iter()
+        .map(|root| {
+            let name = root
+                .file_name()
+                .and_then(OsStr::to_str)
+                .unwrap_or("Proyecto")
+                .to_string();
+            let files = scan_workspace(&root)?;
+            Ok(NativeWorkspace { root: root.to_string_lossy().to_string(), name, files })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(Some(workspaces))
 }
 
 #[tauri::command]

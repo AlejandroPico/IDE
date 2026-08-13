@@ -84,15 +84,21 @@ const looksTextual = (name: string, file: File): boolean => {
   return TEXT_EXTENSIONS.has(extension) || ["dockerfile", "makefile", "license", "readme"].includes(lower);
 };
 
-export const openBrowserFolder = async (): Promise<WorkspaceProject | null> => {
-  if (!window.showDirectoryPicker) throw new Error("Este navegador no ofrece acceso directo a carpetas. Usa Importar proyecto o la aplicación Desktop.");
-  let handle: FileSystemDirectoryHandle;
-  try {
-    handle = await window.showDirectoryPicker({ mode: "readwrite" });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") return null;
-    throw error;
+const PROJECT_MARKERS = new Set([
+  ".git", "package.json", "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts",
+  "cargo.toml", "pyproject.toml", "requirements.txt", "go.mod", "composer.json", "gemfile", "makefile",
+  "cmakelists.txt", ".ide-project.json"
+]);
+
+const looksLikeProjectDirectory = async (directory: FileSystemDirectoryHandle): Promise<boolean> => {
+  for await (const entry of directory.values()) {
+    const name = entry.name.toLowerCase();
+    if (PROJECT_MARKERS.has(name) || name.endsWith(".sln") || name.endsWith(".csproj")) return true;
   }
+  return false;
+};
+
+const browserDirectoryToProject = async (handle: FileSystemDirectoryHandle): Promise<WorkspaceProject> => {
   const files: Record<string, IDEFile> = {};
   let count = 0;
   const walk = async (directory: FileSystemDirectoryHandle, prefix = ""): Promise<void> => {
@@ -129,6 +135,24 @@ export const openBrowserFolder = async (): Promise<WorkspaceProject | null> => {
     createdAt: now,
     updatedAt: now
   };
+};
+
+export const openBrowserFolder = async (): Promise<WorkspaceProject[] | null> => {
+  if (!window.showDirectoryPicker) throw new Error("Este navegador no ofrece acceso directo a carpetas. Usa Importar proyecto o la aplicación Desktop.");
+  let handle: FileSystemDirectoryHandle;
+  try {
+    handle = await window.showDirectoryPicker({ mode: "readwrite" });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return null;
+    throw error;
+  }
+  if (await looksLikeProjectDirectory(handle)) return [await browserDirectoryToProject(handle)];
+  const detected: FileSystemDirectoryHandle[] = [];
+  for await (const entry of handle.values()) {
+    if (entry.kind === "directory" && !IGNORED_FOLDERS.has(entry.name) && await looksLikeProjectDirectory(entry)) detected.push(entry);
+  }
+  const roots = detected.length ? detected.sort((a, b) => a.name.localeCompare(b.name)) : [handle];
+  return Promise.all(roots.map(browserDirectoryToProject));
 };
 
 export const triggerFilePicker = (accept: string): Promise<File | null> =>

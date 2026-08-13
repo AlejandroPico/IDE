@@ -4,6 +4,8 @@ import {
   ArrowUp,
   Box,
   Braces,
+  FileArchive,
+  FileCode2,
   ChevronDown,
   ChevronRight,
   CircleCheck,
@@ -27,15 +29,17 @@ import {
   ServerCog,
   Sparkles,
   TerminalSquare,
+  Upload,
   Workflow,
   X
 } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, type FormEvent, type MouseEvent } from "react";
-import type { GitStatus, IDEFile, SearchResult } from "../core/types";
+import type { GitStatus, IDEFile, SearchResult, WorkspaceProject } from "../core/types";
 import { getLanguage, getLanguageForPath, languageBadge } from "../core/languages";
 import { selectActiveProject, useIDEStore } from "../store/ideStore";
 import { discoverToolchains, getNativeGitStatus, isTauriRuntime, runNativeGitAction } from "../services/desktop";
-import { runActiveFile, saveAllFiles } from "../services/ideActions";
+import { importWorkspaceFile, openWorkspace, runActiveFile, saveActiveFile, saveAllFiles } from "../services/ideActions";
+import { exportProjectJson, exportProjectZip } from "../services/projectIO";
 import { changedSinceSnapshot, createLocalSnapshot, getLocalSnapshots, type LocalSnapshot } from "../services/localHistory";
 
 interface TreeNode {
@@ -45,6 +49,12 @@ interface TreeNode {
   fileId?: string;
   children: TreeNode[];
 }
+
+const projectSource = (item: WorkspaceProject): string => item.nativeRoot
+  ? "Local"
+  : item.templateId === "browser-folder"
+    ? "Carpeta web"
+    : "Virtual";
 
 const buildTree = (files: IDEFile[]): TreeNode[] => {
   const root: TreeNode[] = [];
@@ -122,28 +132,25 @@ const ProjectPanel = () => {
   const projects = useIDEStore((state) => state.projects);
   const switchProject = useIDEStore((state) => state.switchProject);
   const setModal = useIDEStore((state) => state.setModal);
-  const setActivity = useIDEStore((state) => state.setActivity);
-  const files = Object.values(project.files);
-  const folders = new Set(files.flatMap((file) => {
-    const parts = file.path.split("/");
-    return parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join("/"));
-  }));
   return (
     <div className="panel-content project-panel">
-      <div className="side-heading"><div><span>PROYECTO ACTIVO</span><strong>{project.name}</strong></div><PackageOpen size={18} /></div>
+      <div className="side-heading"><div><span>PROYECTO</span><strong>{project.name}</strong></div><PackageOpen size={18} /></div>
       <label className="project-switcher">
-        <span>Espacio de trabajo</span>
+        <span>Espacios de trabajo e historial</span>
         <select value={project.id} onChange={(event) => switchProject(event.target.value)}>
-          {Object.values(projects).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          {Object.values(projects).map((item) => <option key={item.id} value={item.id}>{item.name} · {projectSource(item)} · {new Date(item.updatedAt).toLocaleDateString("es-ES")}</option>)}
         </select>
       </label>
-      <div className="metric-grid project-metrics"><div><strong>{files.length}</strong><span>archivos</span></div><div><strong>{folders.size}</strong><span>carpetas</span></div><div><strong>{project.nativeRoot ? "LOCAL" : "WEB"}</strong><span>origen</span></div><div><strong>{new Set(files.map((file) => file.language)).size}</strong><span>lenguajes</span></div></div>
       <div className="project-panel__actions">
-        <button type="button" onClick={() => setActivity("structure")}><FolderOpen size={16} /><span><strong>Abrir estructura</strong><small>Árbol de carpetas y archivos</small></span><ChevronRight size={14} /></button>
-        <button type="button" onClick={() => setModal("projectWizard", true)}><PackageOpen size={16} /><span><strong>Nuevo proyecto</strong><small>Asistente multilenguaje</small></span><ChevronRight size={14} /></button>
-        <button type="button" onClick={() => setActivity("source")}><GitBranch size={16} /><span><strong>Control de cambios</strong><small>{project.nativeRoot ? "Git y archivos locales" : "Historial local"}</small></span><ChevronRight size={14} /></button>
+        <button type="button" onClick={() => setModal("projectWizard", true)}><PackageOpen size={15} /><span><strong>Nuevo proyecto</strong><small>Asistente multilenguaje</small></span><kbd>Ctrl+N</kbd></button>
+        <button type="button" onClick={() => void openWorkspace()}><FolderOpen size={15} /><span><strong>Abrir carpeta</strong><small>Detecta uno o varios proyectos</small></span><kbd>Ctrl+O</kbd></button>
+        <button type="button" onClick={() => void importWorkspaceFile()}><Upload size={15} /><span><strong>Importar .ide.json</strong><small>Añadir al historial local</small></span></button>
+        <button className="is-separated" type="button" onClick={() => void saveActiveFile()}><Save size={15} /><span><strong>Guardar archivo</strong><small>Pestaña activa</small></span><kbd>Ctrl+S</kbd></button>
+        <button type="button" onClick={() => void saveAllFiles()}><Save size={15} /><span><strong>Guardar todo</strong><small>Todos los cambios pendientes</small></span><kbd>Ctrl+Alt+S</kbd></button>
+        <button className="is-separated" type="button" onClick={() => exportProjectJson(project)}><FileCode2 size={15} /><span><strong>Exportar proyecto</strong><small>Formato editable de IDE</small></span></button>
+        <button type="button" onClick={() => void exportProjectZip(project)}><FileArchive size={15} /><span><strong>Exportar ZIP</strong><small>Código listo para compartir</small></span></button>
       </div>
-      <p className="panel-note">{project.nativeRoot || "Proyecto virtual guardado de forma privada en IndexedDB."}</p>
+      <p className="panel-note"><strong>{projectSource(project)}</strong> · {project.nativeRoot || "Conservado de forma privada en este navegador."}</p>
     </div>
   );
 };
@@ -182,7 +189,7 @@ const ExplorerPanel = () => {
         <label className="project-switcher">
           <span>Proyecto activo</span>
           <select value={project.id} onChange={(event) => switchProject(event.target.value)}>
-            {Object.values(projects).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            {Object.values(projects).map((item) => <option key={item.id} value={item.id}>{item.name} · {projectSource(item)} · {new Date(item.updatedAt).toLocaleDateString("es-ES")}</option>)}
           </select>
         </label>
       )}

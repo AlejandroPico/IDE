@@ -24,9 +24,7 @@ const invokeDesktop = async <T>(command: string, args?: Record<string, unknown>)
   return invoke<T>(command, args);
 };
 
-export const openNativeWorkspace = async (): Promise<WorkspaceProject | null> => {
-  const workspace = await invokeDesktop<NativeWorkspace | null>("open_workspace");
-  if (!workspace) return null;
+const nativeWorkspaceToProject = (workspace: NativeWorkspace): WorkspaceProject => {
   const now = new Date().toISOString();
   const files = Object.fromEntries(workspace.files.map((nativeFile) => {
     const id = createId("file");
@@ -51,6 +49,11 @@ export const openNativeWorkspace = async (): Promise<WorkspaceProject | null> =>
     createdAt: now,
     updatedAt: now
   };
+};
+
+export const openNativeWorkspace = async (): Promise<WorkspaceProject[] | null> => {
+  const workspaces = await invokeDesktop<NativeWorkspace[] | null>("open_workspace");
+  return workspaces?.map(nativeWorkspaceToProject) ?? null;
 };
 
 export const saveNativeFile = async (root: string, path: string, content: string): Promise<void> => {

@@ -65,10 +65,12 @@ export const saveAllFiles = async (): Promise<void> => {
 export const openWorkspace = async (): Promise<void> => {
   const state = useIDEStore.getState();
   try {
-    const project = isTauriRuntime() ? await openNativeWorkspace() : await openBrowserFolder();
-    if (project) {
-      state.importProject(project);
-      state.addConsoleEntry({ stream: "system", text: `Espacio de trabajo abierto · ${project.name} · ${Object.keys(project.files).length} archivos de texto` });
+    const projects = isTauriRuntime() ? await openNativeWorkspace() : await openBrowserFolder();
+    if (projects?.length) {
+      projects.forEach((project) => useIDEStore.getState().importProject(project));
+      useIDEStore.getState().switchProject(projects[0]!.id);
+      const files = projects.reduce((total, project) => total + Object.keys(project.files).length, 0);
+      state.addConsoleEntry({ stream: "system", text: `${projects.length === 1 ? "Espacio de trabajo abierto" : `${projects.length} proyectos detectados`} · ${files} archivos de texto` });
     }
   } catch (error) {
     state.addConsoleEntry({ stream: "stderr", text: error instanceof Error ? error.message : String(error) });

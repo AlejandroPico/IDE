@@ -3,7 +3,7 @@ import { MainShell } from "./components/Shell";
 import { DetachedEditor } from "./components/EditorWorkspace";
 import { useIDEStore } from "./store/ideStore";
 import { isDetachedWindow } from "./services/windowing";
-import { runActiveFile, saveActiveFile } from "./services/ideActions";
+import { openWorkspace, runActiveFile, saveActiveFile, saveAllFiles } from "./services/ideActions";
 
 const Splash = () => (
   <div className="splash" role="status" aria-label="Iniciando IDE">
@@ -55,9 +55,18 @@ export default function App() {
       } else if (primary && event.key.toLowerCase() === "p") {
         event.preventDefault();
         setModal("commandPalette", true);
+      } else if (primary && event.altKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveAllFiles();
       } else if (primary && event.key.toLowerCase() === "s") {
         event.preventDefault();
         void saveActiveFile();
+      } else if (primary && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        setModal("projectWizard", true);
+      } else if (primary && event.key.toLowerCase() === "o") {
+        event.preventDefault();
+        void openWorkspace();
       } else if (primary && event.key.toLowerCase() === "b") {
         event.preventDefault();
         toggleLeftPanel();
